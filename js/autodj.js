@@ -14,8 +14,11 @@ import {
 import { showToast, openModal, closeModal } from "./admin.js";
 
 const BROADCAST_MODE_KEY = "radjafm_broadcast_mode_v1";
+const AUTODJ_SESSION_KEY = "radjafm_autodj_playback_session_v1";
 const AUTODJ_BUCKET = "radio_audio";
 const PLAYLIST_TABLE = "playlist";
+
+let sessionRestored = false;
 
 export const autoDjState = {
   broadcastMode: localStorage.getItem(BROADCAST_MODE_KEY) || "stream", // 'stream' | 'autodj'
@@ -29,6 +32,72 @@ export const autoDjState = {
   realtimeBound: false,
   remoteBound: false
 };
+
+export function getAutoDjSession() {
+  try {
+    const raw = localStorage.getItem(AUTODJ_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function saveAutoDjSession(overrideProps = {}) {
+  try {
+    const audio = getAutoDjAudio();
+    const total = autoDjState.tracks.length;
+    const activeTrack =
+      autoDjState.currentIndex >= 0 && autoDjState.currentIndex < total
+        ? autoDjState.tracks[autoDjState.currentIndex]
+        : null;
+
+    if (!activeTrack) return;
+
+    const isPlaying =
+      typeof overrideProps.isPlaying === "boolean"
+        ? overrideProps.isPlaying
+        : autoDjState.isPlaying;
+
+    const currentTime =
+      typeof overrideProps.currentTime === "number"
+        ? overrideProps.currentTime
+        : audio && !isNaN(audio.currentTime)
+        ? audio.currentTime
+        : 0;
+
+    const duration =
+      typeof overrideProps.duration === "number"
+        ? overrideProps.duration
+        : audio && !isNaN(audio.duration) && isFinite(audio.duration)
+        ? audio.duration
+        : 0;
+
+    const startedAt = isPlaying
+      ? Date.now() - Math.round(currentTime * 1000)
+      : null;
+
+    const pausedAt = !isPlaying ? currentTime : null;
+
+    const sessionData = {
+      trackId: activeTrack.id,
+      trackIndex: autoDjState.currentIndex,
+      fileUrl: activeTrack.file_url,
+      title: activeTrack.title,
+      artist: activeTrack.artist,
+      isPlaying: isPlaying,
+      currentTime: currentTime,
+      duration: duration,
+      startedAt: startedAt,
+      pausedAt: pausedAt,
+      updatedAt: Date.now(),
+      ...overrideProps
+    };
+
+    localStorage.setItem(AUTODJ_SESSION_KEY, JSON.stringify(sessionData));
+  } catch (err) {
+    console.warn("Gagal menyimpan sesi AutoDJ:", err);
+  }
+}
 
 function formatDuration(sec) {
   if (!sec || isNaN(sec) || !isFinite(sec)) return "00:00";
@@ -309,11 +378,6 @@ export async function fetchPlaylistFromSupabase() {
     }
 
     if (Array.isArray(data)) {
-      const currentPlayingId =
-        autoDjState.currentIndex >= 0 && autoDjState.tracks[autoDjState.currentIndex]
-          ? autoDjState.tracks[autoDjState.currentIndex].id
-          : null;
-
       autoDjState.tracks = data.map((row) => ({
         id: row.id,
         title: row.title || "Tanpa Judul",
@@ -323,24 +387,178 @@ export async function fetchPlaylistFromSupabase() {
         created_at: row.created_at
       }));
 
-      if (currentPlayingId !== null) {
-        const foundIdx = autoDjState.tracks.findIndex(
-          (t) => String(t.id) === String(currentPlayingId)
-        );
-        autoDjState.currentIndex = foundIdx;
-      } else if (autoDjState.currentIndex < 0 && autoDjState.tracks.length > 0) {
-        autoDjState.currentIndex = 0;
-        const audio = getAutoDjAudio();
-        if (audio && !audio.src) {
-          audio.src = autoDjState.tracks[0].file_url;
-          audio.volume = autoDjState.volume / 100;
-        }
-      } else if (autoDjState.currentIndex >= autoDjState.tracks.length) {
-        autoDjState.currentIndex = autoDjState.tracks.length > 0 ? 0 : -1;
+      if (autoDjState.tracks.length === 0) {
+        autoDjState.currentIndex = -1;
+        autoDjState.isPlaying = false;
+        renderPlaylistTable();
+        updateAutoDjDeckUI();
+        return;
       }
 
-      renderPlaylistTable();
-      updateAutoDjDeckUI();
+      const audio = getAutoDjAudio();
+
+      if (!sessionRestored) {
+        sessionRestored = true;
+        const savedSession = getAutoDjSession();
+
+        let targetIdx = 0;
+        let targetTime = 0;
+        let shouldResume = false;
+
+        if (savedSession) {
+          const matchedIdx = autoDjState.tracks.findIndex(
+            (t) =>
+              String(t.id) === String(savedSession.trackId) ||
+              (t.file_url && t.file_url === savedSession.fileUrl)
+          );
+          if (matchedIdx !== -1) {
+            targetIdx = matchedIdx;
+          } else if (
+            typeof savedSession.trackIndex === "number" &&
+            savedSession.trackIndex >= 0 &&
+            savedSession.trackIndex < autoDjState.tracks.length
+          ) {
+            targetIdx = savedSession.trackIndex;
+          }
+
+          if (savedSession.isPlaying) {
+            shouldResume = true;
+            if (savedSession.startedAt) {
+              const elapsed = (Date.now() - savedSession.startedAt) / 1000;
+              targetTime = Math.max(0, elapsed);
+            } else {
+              targetTime = savedSession.currentTime || 0;
+            }
+          } else {
+            shouldResume = false;
+            targetTime = savedSession.pausedAt ?? savedSession.currentTime ?? 0;
+          }
+        }
+
+        autoDjState.currentIndex = targetIdx;
+        const activeTrack = autoDjState.tracks[targetIdx];
+
+        if (audio && activeTrack && activeTrack.file_url) {
+          if (audio.src !== activeTrack.file_url) {
+            audio.src = activeTrack.file_url;
+          }
+          audio.volume = autoDjState.volume / 100;
+        }
+
+        // Tampilkan langsung di DOM timer dan seek slider (Cegah tampilan kedip 00:00)
+        const curEl = document.getElementById("autoDjCurrentTime");
+        const durEl = document.getElementById("autoDjDuration");
+        const slider = document.getElementById("autoDjSeekSlider");
+        if (curEl) curEl.textContent = formatDuration(targetTime);
+        if (savedSession && savedSession.duration > 0) {
+          if (durEl) durEl.textContent = formatDuration(savedSession.duration);
+          if (slider) {
+            slider.value = Math.min(
+              100,
+              Math.max(0, (targetTime / savedSession.duration) * 100)
+            ).toFixed(1);
+          }
+        }
+
+        autoDjState.isPlaying = shouldResume;
+        renderPlaylistTable();
+        updateAutoDjDeckUI();
+
+        const restorePlaybackState = () => {
+          if (!audio) return;
+
+          // Jika durasi terlampaui saat tab lama tertutup, lompat ke lagu berikutnya
+          if (audio.duration && targetTime >= audio.duration) {
+            if (autoDjState.isLoop || autoDjState.currentIndex < autoDjState.tracks.length - 1) {
+              nextAutoDjTrack(true);
+              return;
+            }
+          }
+
+          if (targetTime > 0) {
+            try {
+              audio.currentTime = targetTime;
+            } catch (e) {}
+          }
+
+          if (curEl) curEl.textContent = formatDuration(audio.currentTime);
+          if (durEl && audio.duration) durEl.textContent = formatDuration(audio.duration);
+          if (slider && audio.duration > 0) {
+            slider.value = ((audio.currentTime / audio.duration) * 100).toFixed(1);
+          }
+
+          if (shouldResume && autoDjState.broadcastMode === "autodj") {
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+              playPromise
+                .then(() => {
+                  autoDjState.isPlaying = true;
+                  updateAutoDjDeckUI();
+                  renderPlaylistTable();
+                  saveAutoDjSession({
+                    isPlaying: true,
+                    currentTime: audio.currentTime
+                  });
+                  syncBroadcastSourceToPublic("autodj", activeTrack);
+                  broadcastAutoDjPlaybackSync({
+                    isPlaying: true,
+                    currentTime: audio.currentTime
+                  });
+                })
+                .catch((err) => {
+                  console.warn("Browser autoplay policy menahan resume otomatis:", err);
+                  // Tetap pertahankan menit lagu yang akurat, tampilkan indikator standby siap lanjut
+                  autoDjState.isPlaying = false;
+                  updateAutoDjDeckUI();
+                  renderPlaylistTable();
+
+                  const statusBadge = document.getElementById("autoDjStatusBadge");
+                  if (statusBadge) {
+                    statusBadge.textContent = "AUTODJ ON AIR • KLIK UNTUK LANJUTKAN";
+                    statusBadge.className =
+                      "text-[11px] font-extrabold uppercase tracking-widest text-amber-400 animate-pulse";
+                  }
+
+                  const resumeOnFirstClick = () => {
+                    window.removeEventListener("click", resumeOnFirstClick);
+                    if (audio.paused && !autoDjState.isPlaying) {
+                      toggleAutoDjPlay();
+                    }
+                  };
+                  window.addEventListener("click", resumeOnFirstClick, { once: true });
+                });
+            }
+          } else {
+            autoDjState.isPlaying = false;
+            updateAutoDjDeckUI();
+            renderPlaylistTable();
+          }
+        };
+
+        if (audio && audio.readyState >= 1) {
+          restorePlaybackState();
+        } else if (audio) {
+          audio.addEventListener("loadedmetadata", restorePlaybackState, { once: true });
+        }
+      } else {
+        // Pembaruan realtime latar belakang saat lagu sudah jalan di memori
+        const currentPlayingId =
+          autoDjState.currentIndex >= 0 && autoDjState.tracks[autoDjState.currentIndex]
+            ? autoDjState.tracks[autoDjState.currentIndex].id
+            : null;
+
+        if (currentPlayingId !== null) {
+          const foundIdx = autoDjState.tracks.findIndex(
+            (t) => String(t.id) === String(currentPlayingId)
+          );
+          autoDjState.currentIndex = foundIdx !== -1 ? foundIdx : 0;
+        } else if (autoDjState.currentIndex < 0) {
+          autoDjState.currentIndex = 0;
+        }
+
+        renderPlaylistTable();
+        updateAutoDjDeckUI();
+      }
     }
   } catch (err) {
     console.warn("Error fetchPlaylistFromSupabase:", err);
@@ -663,6 +881,9 @@ export async function deletePlaylistTrack(id) {
     if (audio) audio.pause();
     autoDjState.isPlaying = false;
     autoDjState.currentIndex = -1;
+    try {
+      localStorage.removeItem(AUTODJ_SESSION_KEY);
+    } catch (e) {}
   }
 
   await fetchPlaylistFromSupabase();
@@ -771,6 +992,7 @@ export async function playAutoDjTrackByIndex(index) {
   try {
     await audio.play();
     autoDjState.isPlaying = true;
+    saveAutoDjSession({ isPlaying: true, currentTime: 0 });
     if (autoDjState.broadcastMode === "autodj") {
       await syncBroadcastSourceToPublic("autodj", targetTrack);
       broadcastAutoDjPlaybackSync({ isPlaying: true, currentTime: 0 });
@@ -780,6 +1002,7 @@ export async function playAutoDjTrackByIndex(index) {
   } catch (err) {
     console.warn("Gagal memutar lagu AutoDJ:", err);
     autoDjState.isPlaying = false;
+    saveAutoDjSession({ isPlaying: false, currentTime: 0 });
     showToast("Gagal memutar file audio: " + (err.message || "Format tidak didukung"), true);
   }
 
@@ -805,6 +1028,7 @@ export async function toggleAutoDjPlay() {
     try {
       await audio.play();
       autoDjState.isPlaying = true;
+      saveAutoDjSession({ isPlaying: true, currentTime: audio.currentTime });
       if (autoDjState.broadcastMode === "autodj") {
         await syncBroadcastSourceToPublic("autodj");
         broadcastAutoDjPlaybackSync({ isPlaying: true, currentTime: audio.currentTime });
@@ -817,6 +1041,7 @@ export async function toggleAutoDjPlay() {
   } else {
     audio.pause();
     autoDjState.isPlaying = false;
+    saveAutoDjSession({ isPlaying: false, currentTime: audio.currentTime });
     if (autoDjState.broadcastMode === "autodj") {
       await syncBroadcastSourceToPublic("autodj");
       broadcastAutoDjPlaybackSync({ isPlaying: false, currentTime: audio.currentTime });
@@ -843,6 +1068,7 @@ export function nextAutoDjTrack(isAutoEnded = false) {
         const audio = getAutoDjAudio();
         if (audio) audio.pause();
         autoDjState.isPlaying = false;
+        saveAutoDjSession({ isPlaying: false, currentTime: 0 });
         renderPlaylistTable();
         updateAutoDjDeckUI();
         return;
@@ -863,6 +1089,7 @@ export function prevAutoDjTrack() {
   const audio = getAutoDjAudio();
   if (audio && audio.currentTime > 4) {
     audio.currentTime = 0;
+    saveAutoDjSession({ currentTime: 0 });
     return;
   }
 
@@ -907,6 +1134,7 @@ export function seekAutoDjAudio(percentVal) {
   if (!audio || !audio.duration || isNaN(audio.duration)) return;
   const pct = parseFloat(percentVal) || 0;
   audio.currentTime = (pct / 100) * audio.duration;
+  saveAutoDjSession({ currentTime: audio.currentTime });
   if (autoDjState.broadcastMode === "autodj") {
     broadcastAutoDjPlaybackSync({ currentTime: audio.currentTime });
   }
@@ -925,9 +1153,16 @@ function bindAutoDjAudioEvents() {
     const durEl = document.getElementById("autoDjDuration");
     const slider = document.getElementById("autoDjSeekSlider");
     if (curEl) curEl.textContent = formatDuration(audio.currentTime);
-    if (durEl) durEl.textContent = formatDuration(audio.duration);
+    if (durEl && audio.duration) durEl.textContent = formatDuration(audio.duration);
     if (slider && audio.duration > 0) {
       slider.value = ((audio.currentTime / audio.duration) * 100).toFixed(1);
+    }
+
+    // Throttle simpan status sesi setiap ~2 detik agar saat refresh menit lagu tetap presisi
+    const now = Date.now();
+    if (!audio._lastSessionSave || now - audio._lastSessionSave > 2000) {
+      audio._lastSessionSave = now;
+      saveAutoDjSession();
     }
   });
 
@@ -938,6 +1173,7 @@ function bindAutoDjAudioEvents() {
 
   audio.addEventListener("play", () => {
     autoDjState.isPlaying = true;
+    saveAutoDjSession({ isPlaying: true, currentTime: audio.currentTime });
     renderPlaylistTable();
     updateAutoDjDeckUI();
   });
@@ -945,9 +1181,15 @@ function bindAutoDjAudioEvents() {
   audio.addEventListener("pause", () => {
     if (!audio.ended) {
       autoDjState.isPlaying = false;
+      saveAutoDjSession({ isPlaying: false, currentTime: audio.currentTime });
       renderPlaylistTable();
       updateAutoDjDeckUI();
     }
+  });
+
+  // Simpan segera saat tab admin hendak di-refresh atau ditutup
+  window.addEventListener("beforeunload", () => {
+    saveAutoDjSession();
   });
 
   // EVENT 'ended': Otomatis mainkan urutan lagu berikutnya di tabel playlist!
