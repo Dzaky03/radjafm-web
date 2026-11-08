@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>Admin Panel - RADJAfm 101.8 FM</title>
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <!-- Supabase JS v2 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#FFF7ED',
+              100: '#FFEDD5',
+              200: '#FED7AA',
+              500: '#FF7A00',
+              600: '#EA580C',
+              700: '#C2410C',
+            },
+            slate: {
+              850: '#151F30',
+              900: '#1F2937'
+            }
+          },
+          fontFamily: {
+            serif: ['"Playfair Display"', 'Georgia', 'serif'],
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-fadeIn {
+      animation: fadeIn 0.2s ease-out forwards;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 9999px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #fdba74;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+
+<body
+  class="bg-[#F9FAFB] text-gray-800 font-sans min-h-screen flex antialiased selection:bg-orange-100 selection:text-orange-900">
+
+  <!-- ==================== SIDEBAR (DESKTOP) ==================== -->
+  <aside
+    class="w-64 bg-slate-850 text-white flex-col justify-between hidden lg:flex fixed inset-y-0 left-0 z-40 shadow-xl">
+    <div>
+      <!-- Brand Logo -->
+      <div class="h-20 px-6 flex items-center justify-between border-b border-white/10">
+        <a href="index.html" class="flex items-center gap-3 group">
+          <div
+            class="w-10 h-10 rounded-full bg-gradient-to-tr from-brand-500 to-amber-500 text-white flex items-center justify-center font-bold shadow-md shadow-brand-500/30">
+            <svg class="w-5 h-5 ml-0.5 fill-current" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z">
+              </path>
+            </svg>
+          </div>
+          <div class="flex flex-col">
+            <span class="font-serif text-xl font-bold tracking-tight text-white leading-none">
+              RADJA<span class="text-brand-500 font-sans text-lg font-extrabold ml-0.5">fm</span>
+            </span>
+            <span class="text-[10px] font-semibold tracking-widest text-orange-300 uppercase mt-1">
+              Studio Admin
+            </span>
+          </div>
+        </a>
+      </div>
+
+      <!-- Navigation Menu -->
+      <nav class="p-4 space-y-1.5">
+        <p class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">Menu Utama</p>
+        <button onclick="switchTab('dashboard')" id="side-dashboard"
+          class="side-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition bg-brand-500 text-white shadow-sm shadow-brand-500/30">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+          </svg>
+          <span>Dashboard Siaran</span>
+        </button>
+
+        <button onclick="switchTab('requests')" id="side-requests"
+          class="side-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/5 transition">
+          <div class="flex items-center gap-3">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+            <span>Moderasi Request</span>
+          </div>
+          <span id="sidebarUnreadBadge"
+            class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-brand-500 text-white">0</span>
+        </button>
+
+        <button onclick="switchTab('schedule')" id="side-schedule"
+          class="side-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/5 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Jadwal Siaran</span>
+        </button>
+
+        <button onclick="switchTab('announcers')" id="side-announcers"
+          class="side-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/5 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span>Data Penyiar</span>
+        </button>
+
+        <button onclick="switchTab('settings')" id="side-settings"
+          class="side-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/5 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span>Pengaturan Stream</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Bottom Sidebar Info -->
+    <div class="p-4 border-t border-white/10 space-y-3">
+      <div class="bg-white/5 rounded-2xl p-3.5 border border-white/10">
+        <div class="flex items-center justify-between text-xs mb-1">
+          <span class="text-gray-400 font-medium">Status Pemancar</span>
+          <span class="inline-flex items-center gap-1.5 text-emerald-400 font-bold">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            ONLINE
+          </span>
+        </div>
+        <p class="text-xs font-bold text-white truncate" id="sidebarActiveShow">Semangat Pagi Jik!</p>
+        <p class="text-[11px] text-gray-400 truncate">101.8 FM • HD 128kbps</p>
+      </div>
+
+      <a href="index.html"
+        class="w-full py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold flex items-center justify-center gap-2 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+        Buka Web Publik
+      </a>
+    </div>
+  </aside>
+
+  <!-- ==================== MAIN CONTENT WRAPPER ==================== -->
+  <div class="flex-1 lg:pl-64 flex flex-col min-h-screen">
+
+    <!-- Top Header -->
+    <header
+      class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-gray-200/80 h-20 px-4 sm:px-8 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div>
+          <h1 class="font-serif text-xl sm:text-2xl font-bold text-gray-900" id="pageTitle">Dashboard Studio</h1>
+          <p class="text-xs text-gray-500 hidden sm:block">Panel kendali siaran langsung, jadwal program, dan interaksi
+            pendengar RADJAfm 101.8 FM</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <span id="toastAlert"
+          class="hidden text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full animate-fadeIn">
+          ✓ Perubahan disimpan
+        </span>
+        <a href="index.html" target="_blank"
+          class="px-3.5 py-2 rounded-xl border border-gray-200 hover:border-brand-500 text-xs font-bold text-gray-700 hover:text-brand-600 transition flex items-center gap-1.5 bg-white shadow-xs">
+          <span>Lihat Live Web</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <!-- Mobile Navigation Tabs -->
+    <div class="lg:hidden flex overflow-x-auto bg-white border-b border-gray-200 px-4 py-2 gap-2">
+      <button onclick="switchTab('dashboard')" id="mob-dashboard"
+        class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap bg-brand-500 text-white">Dashboard</button>
+      <button onclick="switchTab('requests')" id="mob-requests"
+        class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-gray-600 bg-gray-100">Request &amp;
+        Salam</button>
+      <button onclick="switchTab('schedule')" id="mob-schedule"
+        class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-gray-600 bg-gray-100">Jadwal</button>
+      <button onclick="switchTab('announcers')" id="mob-announcers"
+        class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-gray-600 bg-gray-100">Penyiar</button>
+      <button onclick="switchTab('settings')" id="mob-settings"
+        class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-gray-600 bg-gray-100">Pengaturan</button>
+    </div>
+
+    <!-- Main Container -->
+    <main class="flex-1 p-4 sm:p-8 max-w-7xl w-full mx-auto space-y-8">
+
+      <!-- ==================== TAB 1: DASHBOARD OVERVIEW ==================== -->
+      <section id="tab-dashboard" class="admin-tab block space-y-8 animate-fadeIn">
+        <!-- Stat Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Status Siaran</p>
+              <p class="font-serif text-xl font-bold text-gray-900 mt-1" id="statOnAirProgram">Semangat Pagi Jik!</p>
+              <p class="text-xs text-brand-600 font-semibold mt-0.5" id="statOnAirHost">Mas Danu &amp; Mbak Rini</p>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-orange-50 text-brand-500 flex items-center justify-center shrink-0">
+              <span class="relative flex h-3.5 w-3.5">
+                <span
+                  class="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-500 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-brand-500"></span>
+              </span>
+            </div>
+          </div>
+
+          <div
+            class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-orange-200 transition"
+            onclick="switchTab('requests')">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Request &amp; Salam</p>
+              <p class="font-serif text-2xl font-bold text-gray-900 mt-1" id="statTotalRequests">0 Pesan</p>
+              <p class="text-xs text-emerald-600 font-semibold mt-0.5" id="statUnreadRequests">0 belum dibacakan</p>
+            </div>
+            <div
+              class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 font-bold">
+              ✉
+            </div>
+          </div>
+
+          <div
+            class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-orange-200 transition"
+            onclick="switchTab('schedule')">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Jadwal Harian</p>
+              <p class="font-serif text-2xl font-bold text-gray-900 mt-1" id="statTotalSchedule">6 Program</p>
+              <p class="text-xs text-gray-500 mt-0.5">06:00 - 24:00 WIB</p>
+            </div>
+            <div
+              class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 font-bold">
+              🕒
+            </div>
+          </div>
+
+          <div
+            class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center justify-between cursor-pointer hover:border-orange-200 transition"
+            onclick="switchTab('announcers')">
+            <div>
+              <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Tim Penyiar</p>
+              <p class="font-serif text-2xl font-bold text-gray-900 mt-1" id="statTotalAnnouncers">6 Penyiar</p>
+              <p class="text-xs text-gray-500 mt-0.5" id="statActiveAnnouncers">2 sedang bertugas</p>
+            </div>
+            <div
+              class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 font-bold">
+              🎙️
+            </div>
+          </div>
+        </div>
+
+        <!-- Two Column Quick Control & Latest Requests -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <!-- Left: Quick On-Air Controller (5 cols) -->
+          <div class="lg:col-span-5 bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-5">
+            <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+              <div>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-brand-600">Kontrol Cepat Studio</span>
+                <h2 class="font-serif text-xl font-bold text-gray-900">Ubah Info Sedang Mengudara</h2>
+              </div>
+              <span
+                class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-brand-50 text-brand-600 border border-brand-200">LIVE</span>
+            </div>
+
+            <form onsubmit="saveOnAirQuickForm(event)" class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Nama Program
+                  Aktif</label>
+                <input type="text" id="quickProgramTitle" required
+                  class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Penyiar
+                  Bertugas</label>
+                <input type="text" id="quickProgramHosts" required
+                  class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Deskripsi Singkat di
+                  Beranda</label>
+                <textarea id="quickProgramDesc" rows="3" required
+                  class="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"></textarea>
+              </div>
+              <button type="submit"
+                class="w-full py-3 px-5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-md shadow-brand-500/25 transition">
+                Simpan &amp; Terapkan ke Web Publik
+              </button>
+            </form>
+          </div>
+
+          <!-- Right: Recent Listener Requests (7 cols) -->
+          <div class="lg:col-span-7 bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-5">
+            <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+              <div>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-brand-600">Antrean Interaktif</span>
+                <h2 class="font-serif text-xl font-bold text-gray-900">Request &amp; Salam Terbaru</h2>
+              </div>
+              <button onclick="switchTab('requests')" class="text-xs font-bold text-brand-600 hover:text-brand-700">
+                Kelola Semua →
+              </button>
+            </div>
+
+            <div id="dashboardRecentRequests" class="space-y-3 max-h-[360px] overflow-y-auto custom-scrollbar pr-1">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 2: MODERASI REQUEST & SALAM ==================== -->
+      <section id="tab-requests" class="admin-tab hidden space-y-6 animate-fadeIn">
+        <div
+          class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-brand-600">Live Shoutout Moderation</span>
+            <h2 class="font-serif text-2xl font-bold text-gray-900">Daftar Request Lagu &amp; Kirim Salam</h2>
+            <p class="text-xs text-gray-500 mt-0.5">Tandai pesan yang sudah dibacakan penyiar atau hapus pesan yang
+              tidak pantas.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="setRequestFilter('all')" id="filter-all"
+              class="px-3.5 py-2 rounded-xl text-xs font-bold bg-brand-500 text-white transition">Semua</button>
+            <button onclick="setRequestFilter('unread')" id="filter-unread"
+              class="px-3.5 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Belum
+              Dibaca</button>
+            <button onclick="setRequestFilter('read')" id="filter-read"
+              class="px-3.5 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Sudah
+              Dibaca</button>
+            <button onclick="openAddShoutoutModal()"
+              class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-850 hover:bg-slate-900 text-white transition ml-1">
+              + Tambah Salam
+            </button>
+          </div>
+        </div>
+
+        <div id="adminRequestList" class="space-y-3"></div>
+      </section>
+
+      <!-- ==================== TAB 3: KELOLA JADWAL SIARAN ==================== -->
+      <section id="tab-schedule" class="admin-tab hidden space-y-6 animate-fadeIn">
+        <div
+          class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-brand-600">Program Harian (Supabase)</span>
+            <h2 class="font-serif text-2xl font-bold text-gray-900">Manajemen Jadwal Siaran</h2>
+            <p class="text-xs text-gray-500 mt-0.5">Klik "Set ON AIR" untuk mengupdate status <code
+                class="font-mono text-brand-600">is_on_air</code> di tabel <code
+                class="font-mono text-brand-600">schedules</code> Supabase secara langsung.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="seedDefaultSchedulesToSupabase()" id="btnSeedSchedules"
+              class="px-4 py-2.5 rounded-xl border border-brand-200 bg-orange-50 hover:bg-orange-100 text-brand-700 text-xs font-bold transition w-fit">
+              ⚡ Isi 6 Jadwal Awal ke Supabase
+            </button>
+            <button onclick="openScheduleModal()"
+              class="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-md shadow-brand-500/25 transition w-fit">
+              + Tambah Jadwal Baru
+            </button>
+          </div>
+        </div>
+
+        <div id="adminScheduleList" class="space-y-3"></div>
+      </section>
+
+      <!-- ==================== TAB 4: KELOLA PENYIAR ==================== -->
+      <section id="tab-announcers" class="admin-tab hidden space-y-6 animate-fadeIn">
+        <div
+          class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-brand-600">Tim Penyiar</span>
+            <h2 class="font-serif text-2xl font-bold text-gray-900">Manajemen Profil Penyiar</h2>
+            <p class="text-xs text-gray-500 mt-0.5">Kelola daftar penyiar, program yang dibawakan, dan status On-Air
+              mereka.</p>
+          </div>
+          <button onclick="openAnnouncerModal()"
+            class="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-md shadow-brand-500/25 transition w-fit">
+            + Tambah Penyiar
+          </button>
+        </div>
+
+        <div id="adminAnnouncerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      </section>
+
+      <!-- ==================== TAB 5: PENGATURAN STREAM & SISTEM ==================== -->
+      <section id="tab-settings" class="admin-tab hidden space-y-6 animate-fadeIn">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm max-w-2xl space-y-6">
+          <div class="border-b border-gray-100 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <span class="text-xs font-bold uppercase tracking-wider text-brand-600">Konfigurasi Multi-Source Audio</span>
+              <h2 class="font-serif text-2xl font-bold text-gray-900">Pengaturan Live Streaming</h2>
+              <p class="text-xs text-gray-500 mt-0.5">Mendukung Icecast, Shoutcast, HLS (.m3u8), SoundCloud, dan YouTube Live.</p>
+            </div>
+            <span id="streamSourceTypeBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 text-brand-700 border border-orange-200 text-xs font-bold self-start sm:self-center">
+              📻 Icecast / Direct Stream
+            </span>
+          </div>
+
+          <form onsubmit="saveStreamSettings(event)" class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">URL Stream (Icecast / Shoutcast / SoundCloud / YouTube / HLS .m3u8)</label>
+              <input type="text" id="settingStreamUrl" required oninput="updateAdminStreamTypeBadge(this.value)" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-mono focus:ring-2 focus:ring-brand-500 focus:border-brand-500" placeholder="https://ice1.somafm.com/indiepop-128-mp3 atau link SoundCloud / YouTube" />
+              <p id="streamUrlHelperText" class="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
+                💡 Anda dapat memasukkan URL stream Icecast/Shoutcast (<code class="bg-gray-100 px-1 py-0.5 rounded">http://ip:8000/stream</code> atau <code class="bg-gray-100 px-1 py-0.5 rounded">.mp3/.aac/.m3u/.pls</code>), link lagu/playlist <b>SoundCloud</b>, atau link <b>YouTube Live / Video</b>.
+              </p>
+              <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <span class="text-[11px] font-semibold text-gray-400 mr-1">Contoh Siap Pakai:</span>
+                <button type="button" onclick="applyPresetStream('https://ice1.somafm.com/indiepop-128-mp3')" class="text-[11px] px-2.5 py-1 rounded-lg bg-orange-50 text-brand-700 hover:bg-orange-100 font-semibold border border-orange-200 transition">
+                  📻 Icecast Live 24/7
+                </button>
+                <button type="button" onclick="applyPresetStream('https://soundcloud.com/forss/flickermood')" class="text-[11px] px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold border border-amber-200 transition">
+                  ☁️ SoundCloud Track
+                </button>
+                <button type="button" onclick="applyPresetStream('https://www.youtube.com/watch?v=jfKfPfyJRdk')" class="text-[11px] px-2.5 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-semibold border border-red-200 transition">
+                  ▶️ YouTube Live 24/7 (Lofi Radio)
+                </button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Label Kualitas Audio</label>
+                <input type="text" id="settingStreamQuality" required class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500" placeholder="HD 128kbps" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Frekuensi Stasiun</label>
+                <input type="text" id="settingFrequency" required class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500" placeholder="101.8 FM" />
+              </div>
+            </div>
+            <div class="pt-2 flex flex-wrap items-center gap-3">
+              <button type="submit" class="py-3 px-6 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-md shadow-brand-500/25 transition">
+                Simpan Pengaturan Stream
+              </button>
+              <button type="button" onclick="resetToDefaultData()" class="py-3 px-5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition">
+                Reset Semua Data ke Awal
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ==================== MODAL: TAMBAH SALAM / PENGUMUMAN ==================== -->
+  <div id="modalShoutout"
+    class="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-xl space-y-5 animate-fadeIn">
+      <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+        <h3 class="font-serif text-xl font-bold text-gray-900">Tambah Salam / Pengumuman</h3>
+        <button onclick="closeModal('modalShoutout')" class="text-gray-400 hover:text-gray-600">✕</button>
+      </div>
+      <form onsubmit="submitAdminShoutout(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nama Pengirim *</label>
+          <input type="text" id="admShoutName" required placeholder="Contoh: Admin RADJAfm"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Lokasi / Kota</label>
+          <input type="text" id="admShoutLoc" placeholder="Contoh: Studio Semarang"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Artis - Judul Lagu (Opsional)</label>
+          <input type="text" id="admShoutSong" placeholder="Contoh: Sheila On 7 - Dan"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Isi Pesan / Salam *</label>
+          <textarea id="admShoutMsg" rows="3" required placeholder="Tulis pesan..."
+            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm resize-none"></textarea>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modalShoutout')"
+            class="px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600">Batal</button>
+          <button type="submit"
+            class="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold">Kirim ke
+            Feed</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: TAMBAH / EDIT JADWAL ==================== -->
+  <div id="modalSchedule"
+    class="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-xl space-y-5 animate-fadeIn">
+      <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+        <h3 class="font-serif text-xl font-bold text-gray-900" id="modalScheduleTitle">Tambah Jadwal Siaran</h3>
+        <button onclick="closeModal('modalSchedule')" class="text-gray-400 hover:text-gray-600">✕</button>
+      </div>
+      <form onsubmit="submitScheduleForm(event)" class="space-y-4">
+        <input type="hidden" id="schedEditId" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Jam Siaran *</label>
+            <input type="text" id="schedTime" required placeholder="09:00 - 12:00 WIB"
+              class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Status *</label>
+            <select id="schedStatus" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm">
+              <option value="SELESAI">SELESAI</option>
+              <option value="ON AIR">ON AIR</option>
+              <option value="BERIKUTNYA">BERIKUTNYA</option>
+              <option value="NANTI">NANTI</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nama Program *</label>
+          <input type="text" id="schedTitle" required placeholder="Contoh: Semangat Pagi Jik!"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Penyiar *</label>
+          <input type="text" id="schedHosts" required placeholder="Contoh: Mas Danu & Mbak Rini"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Kategori / Genre *</label>
+          <input type="text" id="schedGenre" required placeholder="Contoh: Morning Talk & Hits"
+            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Deskripsi Singkat *</label>
+          <textarea id="schedDesc" rows="2" required
+            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm resize-none"></textarea>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modalSchedule')"
+            class="px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600">Batal</button>
+          <button type="submit"
+            class="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold">Simpan
+            Jadwal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: TAMBAH / EDIT PENYIAR ==================== -->
+  <div id="modalAnnouncer"
+    class="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-xl space-y-5 animate-fadeIn">
+      <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+        <h3 class="font-serif text-xl font-bold text-gray-900" id="modalAnnouncerTitle">Tambah Penyiar</h3>
+        <button onclick="closeModal('modalAnnouncer')" class="text-gray-400 hover:text-gray-600">✕</button>
+      </div>
+      <form onsubmit="submitAnnouncerForm(event)" class="space-y-3.5">
+        <input type="hidden" id="annEditId" />
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nama Penyiar *</label>
+          <input type="text" id="annName" required placeholder="Contoh: Mas Danu"
+            class="w-full px-3.5 py-2 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Program Utama *</label>
+            <input type="text" id="annShow" required placeholder="Semangat Pagi Jik!"
+              class="w-full px-3.5 py-2 rounded-xl border border-gray-200 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Jam Siaran *</label>
+            <input type="text" id="annTime" required placeholder="09:00 - 12:00 WIB"
+              class="w-full px-3.5 py-2 rounded-xl border border-gray-200 text-sm font-mono" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Label Role *</label>
+            <input type="text" id="annTag" required placeholder="On Air Pagi"
+              class="w-full px-3.5 py-2 rounded-xl border border-gray-200 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Instagram / Sosmed *</label>
+            <input type="text" id="annSocial" required placeholder="@masdanu.onair"
+              class="w-full px-3.5 py-2 rounded-xl border border-gray-200 text-sm font-mono" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">URL Foto Profil</label>
+          <input type="url" id="annAvatar" placeholder="https://..."
+            class="w-full px-3.5 py-2 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Bio Singkat *</label>
+          <textarea id="annBio" rows="2" required
+            class="w-full px-3.5 py-2 rounded-xl border border-gray-200 text-sm resize-none"></textarea>
+        </div>
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="annOnline" class="rounded text-brand-500 focus:ring-brand-500" />
+          <label for="annOnline" class="text-xs font-semibold text-gray-700">Tandai sedang bertugas (Indikator Hijau
+            On-Air)</label>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modalAnnouncer')"
+            class="px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600">Batal</button>
+          <button type="submit"
+            class="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold">Simpan
+            Penyiar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODULAR ES6 ADMIN JAVASCRIPT ==================== -->
+  <script type="module" src="./js/admin.js"></script>
+</body>
+
+</html>
