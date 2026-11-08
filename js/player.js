@@ -12,6 +12,7 @@ import {
 
 export const playerState = {
   isPlaying: false,
+  listenerActive: false,
   volume: 80,
   isMuted: false,
   prevVolume: 80,
@@ -481,7 +482,7 @@ export function configurePlayerStream(rawStreamUrl) {
   } else {
     stopAllOtherPlayers("audio");
     if (dock) dock.classList.add("hidden");
-    if (wasPlaying) {
+    if (wasPlaying && playerState.listenerActive) {
       playIcecastOrDirectAudio(playerState.activeStreamUrl);
     } else if (audioElement) {
       audioElement.src = playerState.activeStreamUrl;
@@ -525,15 +526,23 @@ export function syncPlaybackState(isPlaying, currentTime) {
         } catch (e) {}
       }
     }
-    audioElement
-      .play()
-      .then(() => {
-        playerState.isPlaying = true;
-        updateAudioUI();
-      })
-      .catch((e) => {
-        console.warn("Autoplay gesture blocked on listener client:", e);
-      });
+    // HANYA putar suara di pendengar jika pendengar sedang dalam status AKTIF mendengarkan!
+    // Jika pendengar sedang pause lokal, biarkan tetap diam tanpa memutar audio tiba-tiba.
+    if (playerState.listenerActive) {
+      audioElement
+        .play()
+        .then(() => {
+          playerState.isPlaying = true;
+          updateAudioUI();
+        })
+        .catch((e) => {
+          console.warn("Autoplay gesture blocked on listener client:", e);
+        });
+    } else {
+      audioElement.pause();
+      playerState.isPlaying = false;
+      updateAudioUI();
+    }
   }
 }
 
@@ -551,6 +560,7 @@ export function toggleAudio() {
   }
 
   if (!playerState.isPlaying) {
+    playerState.listenerActive = true; // Pendengar secara sadar ingin mendengarkan
     playerState.isPlaying = true;
     updateAudioUI();
     if (
@@ -574,6 +584,7 @@ export function toggleAudio() {
     }
   } else {
     // Pendengar menjeda speakernya sendiri secara lokal (TIDAK mempengaruhi Admin!)
+    playerState.listenerActive = false; // Tandai bahwa pendengar memilih untuk tidak mendengar
     clearTimeout(ytWatchdog);
     playerState.isPlaying = false;
     updateAudioUI();
