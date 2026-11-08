@@ -234,13 +234,17 @@ export async function playIcecastOrDirectAudio(targetUrl) {
     audioElement.src = resolvedUrl;
   }
 
+  const isLocalAutoDj =
+    resolvedUrl.includes("/radio_audio/") ||
+    (playerState.activeStreamUrl && playerState.activeStreamUrl.includes("/radio_audio/"));
+
   try {
     await audioElement.play();
     playerState.isPlaying = true;
     updateAudioUI();
   } catch (err1) {
-    // Retry with Shoutcast v1 semicolon suffix
-    if (!resolvedUrl.endsWith(";")) {
+    // Retry dengan Shoutcast v1 semicolon suffix HANYA untuk stream relay Icecast/Shoutcast
+    if (!isLocalAutoDj && !resolvedUrl.endsWith(";")) {
       try {
         audioElement.src = resolvedUrl.replace(/\/?$/, "/;");
         await audioElement.play();
@@ -249,8 +253,14 @@ export async function playIcecastOrDirectAudio(targetUrl) {
         return;
       } catch (err2) {}
     }
-    console.warn("Stream utama gagal diputar, mengalihkan ke Icecast cadangan:", err1);
-    fallbackToBackupIcecast();
+    if (!isLocalAutoDj) {
+      console.warn("Stream utama gagal diputar, mengalihkan ke Icecast cadangan:", err1);
+      fallbackToBackupIcecast();
+    } else {
+      console.warn("Audio AutoDJ ditahan kebijakan autoplay browser (menunggu klik pendengar):", err1);
+      playerState.isPlaying = false;
+      updateAudioUI();
+    }
   }
 }
 
@@ -482,10 +492,26 @@ export function configurePlayerStream(rawStreamUrl) {
   } else {
     stopAllOtherPlayers("audio");
     if (dock) dock.classList.add("hidden");
-    if (wasPlaying && playerState.listenerActive) {
-      playIcecastOrDirectAudio(playerState.activeStreamUrl);
-    } else if (audioElement) {
-      audioElement.src = playerState.activeStreamUrl;
+
+    const isAutoDj = detected.url.includes("/radio_audio/");
+    if (isAutoDj) {
+      // Jika beralih ke AutoDJ, periksa apakah studio sedang ON AIR
+      if (playerState.studioAutoDjOnAir && playerState.listenerActive) {
+        playIcecastOrDirectAudio(playerState.activeStreamUrl);
+      } else {
+        if (audioElement) {
+          audioElement.pause();
+          audioElement.src = playerState.activeStreamUrl;
+        }
+        playerState.isPlaying = false;
+      }
+    } else {
+      // Beralih ke URL Stream (Icecast)
+      if (wasPlaying && playerState.listenerActive) {
+        playIcecastOrDirectAudio(playerState.activeStreamUrl);
+      } else if (audioElement) {
+        audioElement.src = playerState.activeStreamUrl;
+      }
     }
   }
   updateAudioUI();
@@ -519,6 +545,9 @@ export function syncPlaybackState(isPlaying, currentTime) {
     updateAudioUI();
   } else if (isPlaying === true) {
     playerState.studioAutoDjOnAir = true;
+    if (playerState.activeStreamUrl && audioElement.getAttribute("src") !== playerState.activeStreamUrl) {
+      audioElement.src = playerState.activeStreamUrl;
+    }
     if (typeof currentTime === "number" && !isNaN(currentTime)) {
       if (Math.abs(audioElement.currentTime - currentTime) > 2) {
         try {

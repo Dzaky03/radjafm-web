@@ -569,6 +569,16 @@ function applyStudioConfig(data) {
   if (!data || typeof data !== "object") return;
 
   if (data.onAir) {
+    const isAutoDjMode = data.onAir.sourceMode === "autodj";
+    const isPaused = data.onAir.quality === "AutoDJ Paused";
+    const isOnAir = data.onAir.quality === "AutoDJ HD" || (!isPaused && isAutoDjMode);
+
+    if (isAutoDjMode) {
+      playerState.studioAutoDjOnAir = isOnAir;
+    } else {
+      playerState.studioAutoDjOnAir = false;
+    }
+
     if (data.onAir.streamUrl) {
       configurePlayerStream(data.onAir.streamUrl);
     }
@@ -582,16 +592,27 @@ function applyStudioConfig(data) {
     const heroTitle = document.getElementById("heroProgramTitle");
     const heroHosts = document.getElementById("heroProgramHosts");
 
-    if (data.onAir.sourceMode === "autodj") {
+    if (isAutoDjMode) {
       const track = data.onAir.autodjTrack;
       const title = track?.title || "AutoDJ Playlist";
       const artist = track?.artist || "RADJAfm AutoDJ";
       if (playerTitle) playerTitle.textContent = `${title} - RADJAfm`;
-      if (playerHosts) playerHosts.textContent = `🎵 AutoDJ • ${artist}`;
+      if (playerHosts) {
+        playerHosts.textContent = isOnAir
+          ? `🎵 AutoDJ • ${artist}`
+          : `⏸️ AutoDJ Paused • ${artist}`;
+      }
       if (heroTitle) {
-        heroTitle.innerHTML = `${escapeHtml(title)} <span class="text-brand-500 italic">• AutoDJ</span>`;
+        heroTitle.innerHTML = `${escapeHtml(title)} <span class="text-brand-500 italic">${
+          isOnAir ? "• AutoDJ ON AIR" : "• AutoDJ PAUSED"
+        }</span>`;
       }
       if (heroHosts) heroHosts.textContent = artist;
+
+      // JIKA STUDIO SEDANG JEDA, HENTIKAN SUARA DI SELURUH PENDENGAR!
+      if (!isOnAir) {
+        syncPlaybackState(false);
+      }
     } else if (data.onAir.sourceMode === "stream") {
       loadSchedulesFromSupabase();
     }
@@ -655,12 +676,38 @@ export async function loadStudioSettingsAndAnnouncersFromSupabase() {
 
       playerState.studioAutoDjOnAir = isAutoDj && row.quality === "AutoDJ HD";
 
+      let autodjTrack = null;
+      if (isAutoDj && row.stream_url) {
+        try {
+          const { data: trackData } = await supabaseClient
+            .from("playlist")
+            .select("id, title, artist, file_url")
+            .eq("file_url", row.stream_url)
+            .limit(1);
+          if (trackData && trackData[0]) {
+            autodjTrack = trackData[0];
+          }
+        } catch (e) {}
+      }
+
       configUpdate.onAir = {
         streamUrl: row.stream_url || row.streamUrl,
         quality: row.quality || (isAutoDj ? (playerState.studioAutoDjOnAir ? "AutoDJ HD" : "AutoDJ Paused") : "HD 128kbps"),
         frequency: row.frequency || "101.8 FM",
-        sourceMode: isAutoDj ? "autodj" : "stream"
+        sourceMode: isAutoDj ? "autodj" : "stream",
+        autodjTrack: autodjTrack
       };
+
+      // Hitung posisi menit siaran saat ini dari updated_at Supabase
+      if (isAutoDj && row.updated_at) {
+        const elapsed = Math.max(0, (Date.now() - new Date(row.updated_at).getTime()) / 1000);
+        const { audioElement } = getPlayerDom();
+        if (audioElement && !isNaN(elapsed) && isFinite(elapsed)) {
+          try {
+            audioElement.currentTime = elapsed;
+          } catch (e) {}
+        }
+      }
     }
 
     if (!announcersRes.error && Array.isArray(announcersRes.data) && announcersRes.data.length > 0) {
@@ -717,6 +764,16 @@ export function handleAutoDjPlaybackSync(payload) {
     syncPlaybackState(isPlaying, currentTime);
   } else if (sourceMode === "stream") {
     playerState.studioAutoDjOnAir = false;
+
+    const playerTitle = document.getElementById("playerTrackTitle");
+    const playerHosts = document.getElementById("playerAnnouncerInfo");
+    const heroTitle = document.getElementById("heroProgramTitle");
+    const heroHosts = document.getElementById("heroProgramHosts");
+    if (playerTitle) playerTitle.textContent = "RADJAfm 101.8 FM";
+    if (playerHosts) playerHosts.textContent = "Live Radio Stream";
+    if (heroTitle) heroTitle.innerHTML = `RADJAfm 101.8 FM <span class="text-brand-500 italic">• LIVE</span>`;
+    if (heroHosts) heroHosts.textContent = "Streaming Radio";
+
     if (streamUrl) {
       configurePlayerStream(streamUrl);
     }
@@ -817,7 +874,8 @@ function setupRealtimeSubscriptions() {
       if (payload && payload.payload) {
         handleAutoDjPlaybackSync(payload.payload);
       }
-    });
+    })
+    .subscribe();
 }
 
 // --- Initialization & Global Bindings ---

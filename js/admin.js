@@ -9,6 +9,7 @@ import {
   SCHEDULE_META_STORAGE_KEY,
   DEFAULT_ICECAST_STREAM,
   liveBroadcast,
+  studioSyncChannel,
   escapeHtml,
   formatRelativeTime,
   parseAndNormalizeScheduleTime
@@ -35,7 +36,6 @@ import {
 
 let knownRequestColumns = null;
 let knownScheduleColumns = null;
-let studioSyncChannel = null;
 let realtimeInitialized = false;
 let authListenerInitialized = false;
 
@@ -899,8 +899,9 @@ function initSupabaseRealtime() {
     )
     .subscribe();
 
-  studioSyncChannel = supabaseClient.channel("radjafm-studio-sync");
-  studioSyncChannel.subscribe();
+  if (studioSyncChannel && typeof studioSyncChannel.subscribe === "function") {
+    studioSyncChannel.subscribe();
+  }
 }
 
 // --- Tab Navigation ---

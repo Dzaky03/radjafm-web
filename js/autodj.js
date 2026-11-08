@@ -19,6 +19,8 @@ const AUTODJ_BUCKET = "radio_audio";
 const PLAYLIST_TABLE = "playlist";
 
 let sessionRestored = false;
+let isPageUnloading = false;
+let isRestoringSession = false;
 
 export const autoDjState = {
   broadcastMode: localStorage.getItem(BROADCAST_MODE_KEY) || "stream", // 'stream' | 'autodj'
@@ -58,12 +60,22 @@ export function saveAutoDjSession(overrideProps = {}) {
         ? overrideProps.isPlaying
         : autoDjState.isPlaying;
 
-    const currentTime =
-      typeof overrideProps.currentTime === "number"
-        ? overrideProps.currentTime
-        : audio && !isNaN(audio.currentTime)
-        ? audio.currentTime
-        : 0;
+    let currentTime = 0;
+    if (typeof overrideProps.currentTime === "number" && !isNaN(overrideProps.currentTime)) {
+      currentTime = overrideProps.currentTime;
+    } else if (audio && !isNaN(audio.currentTime) && audio.currentTime > 0) {
+      currentTime = audio.currentTime;
+    } else {
+      // Pertahankan menit sebelumnya jika audio sedang di-reload
+      const prev = getAutoDjSession();
+      if (prev && String(prev.trackId) === String(activeTrack.id)) {
+        if (isPlaying && prev.startedAt) {
+          currentTime = Math.max(0, (Date.now() - prev.startedAt) / 1000);
+        } else {
+          currentTime = prev.currentTime || 0;
+        }
+      }
+    }
 
     const duration =
       typeof overrideProps.duration === "number"
@@ -154,7 +166,10 @@ export async function syncBroadcastSourceToPublic(mode, trackOverride = null) {
             : "AutoDJ Paused"
           : "HD 128kbps",
       frequency: "101.8 FM",
-      updated_at: new Date().toISOString()
+      updated_at:
+        targetMode === "autodj" && autoDjState.isPlaying
+          ? new Date(Date.now() - Math.round(((getAutoDjAudio()?.currentTime) || 0) * 1000)).toISOString()
+          : new Date().toISOString()
     };
 
     try {
@@ -326,6 +341,7 @@ export async function setBroadcastSourceMode(mode, silent = false) {
     if (audio) {
       audio.pause();
       autoDjState.isPlaying = false;
+      saveAutoDjSession({ isPlaying: false });
       updateAutoDjDeckUI();
       renderPlaylistTable();
     }
@@ -399,6 +415,7 @@ export async function fetchPlaylistFromSupabase() {
 
       if (!sessionRestored) {
         sessionRestored = true;
+        isRestoringSession = true;
         const savedSession = getAutoDjSession();
 
         let targetIdx = 0;
@@ -480,6 +497,7 @@ export async function fetchPlaylistFromSupabase() {
               audio.currentTime = targetTime;
             } catch (e) {}
           }
+          isRestoringSession = false;
 
           if (curEl) curEl.textContent = formatDuration(audio.currentTime);
           if (durEl && audio.duration) durEl.textContent = formatDuration(audio.duration);
@@ -1136,6 +1154,7 @@ export function seekAutoDjAudio(percentVal) {
   audio.currentTime = (pct / 100) * audio.duration;
   saveAutoDjSession({ currentTime: audio.currentTime });
   if (autoDjState.broadcastMode === "autodj") {
+    syncBroadcastSourceToPublic("autodj");
     broadcastAutoDjPlaybackSync({ currentTime: audio.currentTime });
   }
 }
@@ -1149,6 +1168,7 @@ function bindAutoDjAudioEvents() {
   audio.volume = autoDjState.volume / 100;
 
   audio.addEventListener("timeupdate", () => {
+    if (isRestoringSession && audio.currentTime === 0) return;
     const curEl = document.getElementById("autoDjCurrentTime");
     const durEl = document.getElementById("autoDjDuration");
     const slider = document.getElementById("autoDjSeekSlider");
@@ -1179,6 +1199,7 @@ function bindAutoDjAudioEvents() {
   });
 
   audio.addEventListener("pause", () => {
+    if (isPageUnloading) return; // ABAIKAN event pause saat browser sedang me-reload/menutup halaman
     if (!audio.ended) {
       autoDjState.isPlaying = false;
       saveAutoDjSession({ isPlaying: false, currentTime: audio.currentTime });
@@ -1189,6 +1210,7 @@ function bindAutoDjAudioEvents() {
 
   // Simpan segera saat tab admin hendak di-refresh atau ditutup
   window.addEventListener("beforeunload", () => {
+    isPageUnloading = true;
     saveAutoDjSession();
   });
 

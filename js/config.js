@@ -32,7 +32,11 @@ export const liveBroadcast =
     : null;
 
 // Shared Supabase Realtime Channel
-export const studioSyncChannel = supabaseClient.channel("radjafm-studio-sync");
+export const studioSyncChannel = supabaseClient.channel("radjafm-studio-sync", {
+  config: {
+    broadcast: { ack: true }
+  }
+});
 studioSyncChannel.subscribe();
 
 /**
