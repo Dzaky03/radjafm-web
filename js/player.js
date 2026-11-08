@@ -5,7 +5,9 @@
 
 import {
   DEFAULT_ICECAST_STREAM,
-  BACKUP_ICECAST_STREAMS
+  BACKUP_ICECAST_STREAMS,
+  liveBroadcast,
+  studioSyncChannel
 } from "./config.js";
 
 export const playerState = {
@@ -16,7 +18,8 @@ export const playerState = {
   activeStreamUrl: DEFAULT_ICECAST_STREAM,
   activeSourceType: "audio", // 'audio' | 'youtube' | 'soundcloud'
   currentYouTubeId: null,
-  currentScUrl: null
+  currentScUrl: null,
+  studioAutoDjOnAir: false
 };
 
 let ytPlayer = null;
@@ -487,8 +490,66 @@ export function configurePlayerStream(rawStreamUrl) {
   updateAudioUI();
 }
 
+export function showListenerToast(msg, duration = 3500) {
+  const toast = document.getElementById("listenerToast");
+  const text = document.getElementById("listenerToastText");
+  if (!toast || !text) return;
+  text.textContent = msg;
+  toast.classList.remove("hidden");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
+    toast.classList.add("hidden");
+  }, duration);
+}
+
+export function syncPlaybackState(isPlaying, currentTime) {
+  const { audioElement } = getPlayerDom();
+  if (!audioElement) return;
+
+  if (isPlaying === false) {
+    audioElement.pause();
+    playerState.isPlaying = false;
+    playerState.studioAutoDjOnAir = false;
+    if (typeof currentTime === "number" && !isNaN(currentTime)) {
+      try {
+        audioElement.currentTime = currentTime;
+      } catch (e) {}
+    }
+    updateAudioUI();
+  } else if (isPlaying === true) {
+    playerState.studioAutoDjOnAir = true;
+    if (typeof currentTime === "number" && !isNaN(currentTime)) {
+      if (Math.abs(audioElement.currentTime - currentTime) > 2) {
+        try {
+          audioElement.currentTime = currentTime;
+        } catch (e) {}
+      }
+    }
+    audioElement
+      .play()
+      .then(() => {
+        playerState.isPlaying = true;
+        updateAudioUI();
+      })
+      .catch((e) => {
+        console.warn("Autoplay gesture blocked on listener client:", e);
+      });
+  }
+}
+
 export function toggleAudio() {
   const { dock } = getPlayerDom();
+  const isAutoDj =
+    playerState.activeStreamUrl &&
+    playerState.activeStreamUrl.includes("/radio_audio/");
+
+  // JIKA MODE AUTODJ DAN STUDIO SEDANG JEDA / STANDBY:
+  // BLOKIR PENDENGAR! Kontrol penuh ada pada Admin. Pendengar tidak diizinkan memutar sendiri.
+  if (isAutoDj && !playerState.studioAutoDjOnAir) {
+    showListenerToast("⚠️ Siaran AutoDJ sedang JEDA di Studio Admin. Menunggu Admin memulai siaran.");
+    return;
+  }
+
   if (!playerState.isPlaying) {
     playerState.isPlaying = true;
     updateAudioUI();
@@ -512,6 +573,7 @@ export function toggleAudio() {
       playIcecastOrDirectAudio(playerState.activeStreamUrl);
     }
   } else {
+    // Pendengar menjeda speakernya sendiri secara lokal (TIDAK mempengaruhi Admin!)
     clearTimeout(ytWatchdog);
     playerState.isPlaying = false;
     updateAudioUI();
@@ -618,6 +680,12 @@ export function initPlayer() {
   const { audioElement } = getPlayerDom();
   if (audioElement) {
     audioElement.volume = playerState.volume / 100;
+    audioElement.addEventListener("ended", () => {
+      // Jika lagu MP3 selesai (mode AutoDJ), sinkronkan ulang pengaturan studio
+      if (typeof window.loadStudioSettingsAndAnnouncersFromSupabase === "function") {
+        window.loadStudioSettingsAndAnnouncersFromSupabase();
+      }
+    });
   }
   updateAudioUI();
 }

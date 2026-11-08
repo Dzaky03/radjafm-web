@@ -242,6 +242,19 @@
           <span>Data Penyiar</span>
         </button>
 
+        <button onclick="switchTab('autodj')" id="side-autodj"
+          class="side-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/5 transition">
+          <div class="flex items-center gap-3">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            </svg>
+            <span>AutoDJ Playlist</span>
+          </div>
+          <span id="sidebarPlaylistBadge"
+            class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-white/10 text-orange-300">0</span>
+        </button>
+
         <button onclick="switchTab('settings')" id="side-settings"
           class="side-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/5 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -304,28 +317,28 @@
         </div>
       </div>
 
-        <div class="flex items-center gap-2.5">
-          <span id="toastAlert"
-            class="hidden text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full animate-fadeIn">
-            ✓ Perubahan disimpan
-          </span>
-          <a href="index.html" target="_blank"
-            class="px-3.5 py-2 rounded-xl border border-gray-200 hover:border-brand-500 text-xs font-bold text-gray-700 hover:text-brand-600 transition flex items-center gap-1.5 bg-white shadow-xs">
-            <span>Lihat Live Web</span>
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round"
-                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
-          <button onclick="handleAdminLogout()"
-            class="px-3.5 py-2 rounded-xl border border-red-200 hover:bg-red-50 text-xs font-bold text-red-600 transition flex items-center gap-1.5 bg-white shadow-xs cursor-pointer">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round"
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span class="hidden sm:inline">Keluar</span>
-          </button>
-        </div>
+      <div class="flex items-center gap-2.5">
+        <span id="toastAlert"
+          class="hidden text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-full animate-fadeIn">
+          ✓ Perubahan disimpan
+        </span>
+        <a href="index.html" target="_blank"
+          class="px-3.5 py-2 rounded-xl border border-gray-200 hover:border-brand-500 text-xs font-bold text-gray-700 hover:text-brand-600 transition flex items-center gap-1.5 bg-white shadow-xs">
+          <span>Lihat Live Web</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+        <button onclick="handleAdminLogout()"
+          class="px-3.5 py-2 rounded-xl border border-red-200 hover:bg-red-50 text-xs font-bold text-red-600 transition flex items-center gap-1.5 bg-white shadow-xs cursor-pointer">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          <span class="hidden sm:inline">Keluar</span>
+        </button>
+      </div>
     </header>
 
     <!-- Mobile Navigation Tabs -->
@@ -339,6 +352,8 @@
         class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-gray-600 bg-gray-100">Jadwal</button>
       <button onclick="switchTab('announcers')" id="mob-announcers"
         class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-gray-600 bg-gray-100">Penyiar</button>
+      <button onclick="switchTab('autodj')" id="mob-autodj"
+        class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-gray-600 bg-gray-100">AutoDJ MP3</button>
       <button onclick="switchTab('settings')" id="mob-settings"
         class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-gray-600 bg-gray-100">Pengaturan</button>
     </div>
@@ -539,7 +554,299 @@
         <div id="adminAnnouncerGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
       </section>
 
-      <!-- ==================== TAB 5: PENGATURAN STREAM & SISTEM ==================== -->
+      <!-- ==================== TAB 5: WEB-BASED AUTODJ & LOCAL PLAYLIST MANAGER ==================== -->
+      <section id="tab-autodj" class="admin-tab hidden space-y-6 animate-fadeIn">
+
+        <!-- 1. Broadcast Source Switcher ("URL Stream (Icecast)" vs "Local MP3 AutoDJ") -->
+        <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-5">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <span class="text-xs font-bold uppercase tracking-wider text-brand-600">Master Audio Routing</span>
+              <h2 class="font-serif text-2xl font-bold text-gray-900">Sakelar Sumber Siaran Studio</h2>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Pilih apakah pemancar menggunakan relay URL Stream eksternal atau pemutar lokal AutoDJ MP3 (ditangkap
+                oleh encoder <b>BUTT / Stereo Mix</b> ke Icecast).
+              </p>
+            </div>
+            <span id="broadcastModeActiveBadge"
+              class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-50 text-brand-700 border border-orange-200 text-xs font-bold self-start md:self-center shrink-0">
+              <span class="w-2 h-2 rounded-full bg-brand-500 animate-ping"></span>
+              <span id="broadcastModeActiveText">Mode: URL Stream (Icecast)</span>
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            <!-- Option A: URL Stream (Icecast) -->
+            <button type="button" id="btnSourceModeStream" onclick="setBroadcastSourceMode('stream')"
+              class="p-4 rounded-2xl border-2 border-brand-500 bg-orange-50/60 text-left transition flex items-start gap-3.5 cursor-pointer">
+              <div
+                class="w-10 h-10 rounded-xl bg-brand-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-sm text-gray-900">URL Stream (Icecast)</span>
+                  <span id="tagModeStream"
+                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-500 text-white uppercase">Aktif</span>
+                </div>
+                <p class="text-xs text-gray-600 mt-1 leading-relaxed">
+                  Siarkan link URL Icecast / relay eksternal langsung ke pemutar seluruh pendengar web publik.
+                </p>
+              </div>
+            </button>
+
+            <!-- Option B: Local MP3 AutoDJ -->
+            <button type="button" id="btnSourceModeAutoDj" onclick="setBroadcastSourceMode('autodj')"
+              class="p-4 rounded-2xl border border-gray-200 bg-white hover:border-orange-200 text-left transition flex items-start gap-3.5 cursor-pointer">
+              <div
+                class="w-10 h-10 rounded-xl bg-slate-850 text-orange-300 flex items-center justify-center shrink-0 shadow-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-sm text-gray-900">Local MP3 AutoDJ</span>
+                  <span id="tagModeAutoDj"
+                    class="hidden px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-600 text-white uppercase">Aktif</span>
+                </div>
+                <p class="text-xs text-gray-600 mt-1 leading-relaxed">
+                  Siarkan playlist lagu MP3 dari bucket Supabase secara realtime ke pemutar seluruh pendengar web publik.
+                </p>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Studio AutoDJ Player Deck & Upload Form Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+          <!-- Left Column (7 cols): Studio AutoDJ Deck -->
+          <div
+            class="lg:col-span-7 bg-gradient-to-br from-slate-850 via-slate-900 to-[#1E140C] text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-white/10 flex flex-col justify-between space-y-6">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2.5">
+                <span id="autoDjStatusDot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                <span id="autoDjStatusBadge"
+                  class="text-[11px] font-extrabold uppercase tracking-widest text-orange-300">
+                  AUTODJ STANDBY
+                </span>
+              </div>
+              <span id="autoDjTrackCounter"
+                class="px-3 py-1 rounded-full bg-white/10 border border-white/10 text-xs font-mono font-bold text-gray-200">
+                Track 0 / 0
+              </span>
+            </div>
+
+            <!-- Active Track Info -->
+            <div class="flex items-center gap-4 sm:gap-5 py-2">
+              <div
+                class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-brand-500 to-amber-500 flex items-center justify-center shadow-lg shadow-brand-500/30 shrink-0">
+                <svg id="autoDjDiscIcon" class="w-9 h-9 text-white" fill="none" stroke="currentColor" stroke-width="1.8"
+                  viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+              </div>
+              <div class="min-w-0 flex-1">
+                <span class="text-[10px] font-bold uppercase tracking-widest text-orange-300/90">Sedang Diputar di Deck
+                  AutoDJ</span>
+                <h3 id="autoDjCurrentTitle" class="font-serif text-xl sm:text-2xl font-bold text-white truncate mt-0.5">
+                  Belum Ada Lagu Dipilih
+                </h3>
+                <p id="autoDjCurrentArtist" class="text-sm text-gray-300 font-medium truncate mt-0.5">
+                  Pilih atau unggah lagu MP3 pada daftar playlist di bawah
+                </p>
+              </div>
+            </div>
+
+            <!-- Progress / Seek Bar -->
+            <div class="space-y-2">
+              <input type="range" id="autoDjSeekSlider" min="0" max="100" value="0" step="0.1"
+                oninput="seekAutoDjAudio(this.value)"
+                class="w-full accent-brand-500 h-1.5 bg-white/15 rounded-lg cursor-pointer" />
+              <div class="flex items-center justify-between text-[11px] font-mono text-gray-400">
+                <span id="autoDjCurrentTime">00:00</span>
+                <span class="text-[10px] text-orange-300/80 font-sans font-semibold">Auto-Next Aktif saat Lagu
+                  Berakhir</span>
+                <span id="autoDjDuration">00:00</span>
+              </div>
+            </div>
+
+            <!-- Transport Controls (Prev, Play/Pause, Next, Loop, Shuffle, Volume) -->
+            <div class="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
+              <div class="flex items-center gap-2.5">
+                <!-- Prev Button -->
+                <button type="button" onclick="prevAutoDjTrack()" title="Lagu Sebelumnya"
+                  class="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer">
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                  </svg>
+                </button>
+
+                <!-- Play / Pause Button -->
+                <button type="button" id="btnAutoDjPlayPause" onclick="toggleAutoDjPlay()"
+                  class="px-5 h-12 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-brand-500/30 transition cursor-pointer">
+                  <svg id="iconAutoDjPlay" class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  <svg id="iconAutoDjPause" class="w-5 h-5 fill-current hidden" viewBox="0 0 24 24">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                  </svg>
+                  <span id="labelAutoDjPlayPause">Putar AutoDJ</span>
+                </button>
+
+                <!-- Next Button -->
+                <button type="button" onclick="nextAutoDjTrack()" title="Lagu Berikutnya (Skip)"
+                  class="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer">
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                  </svg>
+                </button>
+
+                <!-- Loop Playlist Toggle -->
+                <button type="button" id="btnAutoDjLoop" onclick="toggleAutoDjLoop()" title="Ulangi Playlist (Loop All)"
+                  class="px-3 h-10 rounded-xl bg-brand-500/20 border border-brand-500/50 text-orange-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+                  <span>🔁 Loop</span>
+                </button>
+
+                <!-- Shuffle Toggle -->
+                <button type="button" id="btnAutoDjShuffle" onclick="toggleAutoDjShuffle()"
+                  title="Acak Urutan Lagu (Shuffle)"
+                  class="px-3 h-10 rounded-xl bg-white/10 border border-white/10 text-gray-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer">
+                  <span>🔀 Acak</span>
+                </button>
+              </div>
+
+              <!-- Volume Control -->
+              <div class="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-xl border border-white/10">
+                <svg class="w-4 h-4 text-orange-300 shrink-0" fill="none" stroke="currentColor" stroke-width="2"
+                  viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+                <input type="range" id="autoDjVolumeSlider" min="0" max="100" value="90"
+                  oninput="changeAutoDjVolume(this.value)"
+                  class="w-20 accent-brand-500 h-1 bg-white/20 rounded-lg cursor-pointer" />
+                <span id="autoDjVolumeText"
+                  class="text-[11px] font-mono font-bold text-gray-300 w-8 text-right">90%</span>
+              </div>
+            </div>
+
+            <!-- Native HTML5 Audio Element for Local AutoDJ Output (Captured by BUTT Stereo Mix) -->
+            <audio id="adminAutoDjAudio" preload="metadata" crossorigin="anonymous" class="hidden"></audio>
+          </div>
+
+          <!-- Right Column (5 cols): Upload MP3 Form to Supabase Storage 'radio_audio' -->
+          <div class="lg:col-span-5 bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-5">
+            <div>
+              <span class="text-xs font-bold uppercase tracking-wider text-brand-600">Supabase Storage •
+                radio_audio</span>
+              <h3 class="font-serif text-xl font-bold text-gray-900 mt-0.5">Upload Lagu MP3 Baru</h3>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Unggah file audio dari laptop Anda ke bucket <code class="font-mono">radio_audio</code> dan simpan ke
+                tabel <code class="font-mono">playlist</code>.
+              </p>
+            </div>
+
+            <form id="formUploadAutoDj" onsubmit="handleUploadPlaylistTrack(event)" class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">File Audio MP3
+                  *</label>
+                <input type="file" id="autoDjInputFile" accept=".mp3,audio/mpeg,audio/*" required
+                  onchange="handleAutoDjFileSelected(event)"
+                  class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-600 hover:file:bg-brand-100 file:cursor-pointer cursor-pointer border border-gray-200 rounded-xl p-1.5 bg-gray-50/50" />
+                <div class="flex items-center justify-between mt-1 text-[11px]">
+                  <span id="autoDjFileSizeHint" class="text-gray-500">Maksimal 50 MB (Batas Supabase Free Tier)</span>
+                  <span id="autoDjFileSelectedSize" class="font-bold hidden"></span>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Judul Lagu *</label>
+                <input type="text" id="autoDjInputTitle" required placeholder="Contoh: Dan"
+                  class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Nama Artis / Penyanyi
+                  *</label>
+                <input type="text" id="autoDjInputArtist" required placeholder="Contoh: Sheila On 7"
+                  class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+              </div>
+
+              <!-- Loading Indicator Box -->
+              <div id="autoDjUploadStatus"
+                class="hidden p-3.5 rounded-2xl bg-orange-50 border border-orange-200 text-xs font-semibold text-brand-700 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span id="autoDjUploadStatusText" class="flex items-center gap-2">
+                    <span
+                      class="w-3.5 h-3.5 rounded-full border-2 border-brand-600 border-t-transparent animate-spin inline-block"></span>
+                    Mengunggah MP3 ke Supabase Storage...
+                  </span>
+                </div>
+                <div class="w-full h-1.5 bg-orange-200/70 rounded-full overflow-hidden">
+                  <div class="h-full bg-brand-500 rounded-full animate-pulse w-full"></div>
+                </div>
+              </div>
+
+              <button type="submit" id="btnSubmitAutoDjUpload"
+                class="w-full py-3 px-5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold shadow-md shadow-brand-500/25 transition flex items-center justify-center gap-2 cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                <span>Upload ke Playlist AutoDJ</span>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- 3. Playlist Table (CRUD UI) -->
+        <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <span class="text-xs font-bold uppercase tracking-wider text-brand-600">Database Tabel: playlist</span>
+              <h3 class="font-serif text-2xl font-bold text-gray-900">Daftar Lagu AutoDJ</h3>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Lagu akan diputar berurutan secara otomatis (Auto-Next) saat pemutaran selesai.
+              </p>
+            </div>
+            <button type="button" onclick="fetchPlaylistFromSupabase()"
+              class="px-3.5 py-2 rounded-xl border border-gray-200 hover:border-brand-500 text-xs font-bold text-gray-700 hover:text-brand-600 transition self-start sm:self-center cursor-pointer">
+              ↻ Muat Ulang Playlist
+            </button>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                  <th class="py-3 px-3 w-12">#</th>
+                  <th class="py-3 px-3">Judul Lagu</th>
+                  <th class="py-3 px-3">Artis</th>
+                  <th class="py-3 px-3 hidden md:table-cell">Waktu Upload</th>
+                  <th class="py-3 px-3 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="autoDjPlaylistTableBody" class="divide-y divide-gray-100 text-sm">
+                <tr>
+                  <td colspan="5" class="py-10 text-center text-xs text-gray-400">
+                    Memuat daftar lagu dari tabel <code class="font-mono">playlist</code>...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ==================== TAB 6: PENGATURAN STREAM & SISTEM ==================== -->
       <section id="tab-settings" class="admin-tab hidden space-y-6 animate-fadeIn">
         <div class="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-sm max-w-2xl space-y-6">
           <div class="border-b border-gray-100 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -806,18 +1113,18 @@
           </div>
         </div>
         <div>
-          <label class="block text-xs font-bold text-gray-700 uppercase mb-1.5">Foto Profil Penyiar (Dari Penyimpanan Lokal)</label>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1.5">Foto Profil Penyiar (Dari Penyimpanan
+            Lokal)</label>
           <input type="hidden" id="annAvatar" />
           <div class="flex items-center gap-3.5 p-3 rounded-2xl border border-gray-200 bg-gray-50/60">
-            <img id="annAvatarPreview"
-              src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"
+            <img id="annAvatarPreview" src="https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"
               alt="Preview Foto Penyiar"
               class="w-14 h-14 rounded-full object-cover ring-2 ring-orange-200 bg-white shrink-0" />
             <div class="flex-1 min-w-0">
-              <input type="file" id="annAvatarFile" accept="image/*"
-                onchange="handleAnnouncerAvatarUpload(event)"
+              <input type="file" id="annAvatarFile" accept="image/*" onchange="handleAnnouncerAvatarUpload(event)"
                 class="block w-full text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-600 hover:file:bg-brand-100 file:cursor-pointer cursor-pointer" />
-              <p class="text-[11px] text-gray-400 mt-1" id="annAvatarFileInfo">Pilih foto (.jpg, .png, .webp) dari perangkat Anda</p>
+              <p class="text-[11px] text-gray-400 mt-1" id="annAvatarFileInfo">Pilih foto (.jpg, .png, .webp) dari
+                perangkat Anda</p>
             </div>
           </div>
         </div>
@@ -837,6 +1144,39 @@
           <button type="submit"
             class="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold">Simpan
             Penyiar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: EDIT LAGU PLAYLIST AUTODJ ==================== -->
+  <div id="modalEditPlaylist"
+    class="fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-xs hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-xl space-y-5 animate-fadeIn">
+      <div class="flex items-center justify-between border-b border-gray-100 pb-3">
+        <h3 class="font-serif text-xl font-bold text-gray-900">Edit Info Lagu Playlist</h3>
+        <button type="button" onclick="closeModal('modalEditPlaylist')"
+          class="text-gray-400 hover:text-gray-600">✕</button>
+      </div>
+      <form onsubmit="submitEditPlaylistForm(event)" class="space-y-4">
+        <input type="hidden" id="editPlaylistId" />
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Judul Lagu *</label>
+          <input type="text" id="editPlaylistTitle" required
+            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Nama Artis *</label>
+          <input type="text" id="editPlaylistArtist" required
+            class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('modalEditPlaylist')"
+            class="px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600">Batal</button>
+          <button type="submit"
+            class="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold cursor-pointer">
+            Simpan Perubahan
+          </button>
         </div>
       </form>
     </div>

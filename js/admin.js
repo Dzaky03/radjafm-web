@@ -13,6 +13,25 @@ import {
   formatRelativeTime,
   parseAndNormalizeScheduleTime
 } from "./config.js";
+import {
+  initAutoDjManager,
+  setBroadcastSourceMode,
+  syncBroadcastSourceToPublic,
+  fetchPlaylistFromSupabase,
+  handleAutoDjFileSelected,
+  handleUploadPlaylistTrack,
+  openEditPlaylistModal,
+  submitEditPlaylistForm,
+  deletePlaylistTrack,
+  playAutoDjTrackByIndex,
+  toggleAutoDjPlay,
+  nextAutoDjTrack,
+  prevAutoDjTrack,
+  toggleAutoDjLoop,
+  toggleAutoDjShuffle,
+  changeAutoDjVolume,
+  seekAutoDjAudio
+} from "./autodj.js";
 
 let knownRequestColumns = null;
 let knownScheduleColumns = null;
@@ -777,7 +796,14 @@ export async function fetchStudioSettingsAndAnnouncersFromSupabase() {
     let updated = false;
     if (!settingsRes.error && Array.isArray(settingsRes.data) && settingsRes.data[0]) {
       const row = settingsRes.data[0];
-      if (row.stream_url) cmsData.onAir.streamUrl = row.stream_url;
+      if (row.stream_url) {
+        cmsData.onAir.streamUrl = row.stream_url;
+        if (!row.stream_url.includes("/radio_audio/")) {
+          try {
+            localStorage.setItem("radjafm_saved_stream_url", row.stream_url);
+          } catch (e) {}
+        }
+      }
       if (row.quality) cmsData.onAir.quality = row.quality;
       if (row.frequency) cmsData.onAir.frequency = row.frequency;
       updated = true;
@@ -885,148 +911,149 @@ export function switchTab(tabName) {
     requests: "Moderasi Request & Salam",
     schedule: "Manajemen Jadwal Siaran",
     announcers: "Manajemen Profil Penyiar",
+    autodj: "Web-based AutoDJ & Playlist Manager",
     settings: "Pengaturan Stream & Sistem"
   };
   const pageTitle = document.getElementById("pageTitle");
   if (pageTitle) pageTitle.textContent = titles[tabName] || "Dashboard Studio";
 
-  ["dashboard", "requests", "schedule", "announcers", "settings"].forEach((t) => {
-    const sec = document.getElementById("tab-" + t);
-    const sideBtn = document.getElementById("side-" + t);
-    const mobBtn = document.getElementById("mob-" + t);
-    if (!sec) return;
+    ["dashboard", "requests", "schedule", "announcers", "autodj", "settings"].forEach((t) => {
+      const sec = document.getElementById("tab-" + t);
+      const sideBtn = document.getElementById("side-" + t);
+      const mobBtn = document.getElementById("mob-" + t);
+      if (!sec) return;
 
-    if (t === tabName) {
-      sec.classList.remove("hidden");
-      sec.classList.add("block");
-      if (sideBtn) {
-        sideBtn.className =
-          "side-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition bg-brand-500 text-white shadow-sm shadow-brand-500/30";
+      if (t === tabName) {
+        sec.classList.remove("hidden");
+        sec.classList.add("block");
+        if (sideBtn) {
+          sideBtn.className =
+            "side-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition bg-brand-500 text-white shadow-sm shadow-brand-500/30";
+        }
+        if (mobBtn) {
+          mobBtn.className =
+            "px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap bg-brand-500 text-white";
+        }
+      } else {
+        sec.classList.add("hidden");
+        sec.classList.remove("block");
+        if (sideBtn) {
+          sideBtn.className =
+            "side-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/5 transition";
+        }
+        if (mobBtn) {
+          mobBtn.className =
+            "px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-gray-600 bg-gray-100";
+        }
       }
-      if (mobBtn) {
-        mobBtn.className =
-          "px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap bg-brand-500 text-white";
-      }
-    } else {
-      sec.classList.add("hidden");
-      sec.classList.remove("block");
-      if (sideBtn) {
-        sideBtn.className =
-          "side-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold text-gray-300 hover:text-white hover:bg-white/5 transition";
-      }
-      if (mobBtn) {
-        mobBtn.className =
-          "px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap text-gray-600 bg-gray-100";
-      }
-    }
-  });
-}
+    });
+  }
 
 // --- Render Functions ---
 export function renderAll() {
-  const unreadCount = cmsData.requests.filter((r) => !r.read).length;
-  const activeAnnCount = cmsData.announcers.filter((a) => a.online).length;
+    const unreadCount = cmsData.requests.filter((r) => !r.read).length;
+    const activeAnnCount = cmsData.announcers.filter((a) => a.online).length;
 
-  document.getElementById("sidebarUnreadBadge").textContent = unreadCount;
-  document.getElementById("sidebarActiveShow").textContent = cmsData.onAir.title;
-  document.getElementById("statOnAirProgram").textContent = cmsData.onAir.title;
-  document.getElementById("statOnAirHost").textContent = cmsData.onAir.hosts;
-  document.getElementById("statTotalRequests").textContent =
-    cmsData.requests.length + " Pesan";
-  document.getElementById("statUnreadRequests").textContent =
-    unreadCount + " belum dibacakan";
-  document.getElementById("statTotalSchedule").textContent =
-    cmsData.schedules.length + " Program";
-  document.getElementById("statTotalAnnouncers").textContent =
-    cmsData.announcers.length + " Penyiar";
-  document.getElementById("statActiveAnnouncers").textContent =
-    activeAnnCount + " sedang bertugas";
+    document.getElementById("sidebarUnreadBadge").textContent = unreadCount;
+    document.getElementById("sidebarActiveShow").textContent = cmsData.onAir.title;
+    document.getElementById("statOnAirProgram").textContent = cmsData.onAir.title;
+    document.getElementById("statOnAirHost").textContent = cmsData.onAir.hosts;
+    document.getElementById("statTotalRequests").textContent =
+      cmsData.requests.length + " Pesan";
+    document.getElementById("statUnreadRequests").textContent =
+      unreadCount + " belum dibacakan";
+    document.getElementById("statTotalSchedule").textContent =
+      cmsData.schedules.length + " Program";
+    document.getElementById("statTotalAnnouncers").textContent =
+      cmsData.announcers.length + " Penyiar";
+    document.getElementById("statActiveAnnouncers").textContent =
+      activeAnnCount + " sedang bertugas";
 
-  const activeEl = document.activeElement;
-  if (activeEl !== document.getElementById("quickProgramTitle")) {
-    document.getElementById("quickProgramTitle").value = cmsData.onAir.title;
-  }
-  if (activeEl !== document.getElementById("quickProgramHosts")) {
-    document.getElementById("quickProgramHosts").value = cmsData.onAir.hosts;
-  }
-  if (activeEl !== document.getElementById("quickProgramDesc")) {
-    document.getElementById("quickProgramDesc").value = cmsData.onAir.description;
+    const activeEl = document.activeElement;
+    if (activeEl !== document.getElementById("quickProgramTitle")) {
+      document.getElementById("quickProgramTitle").value = cmsData.onAir.title;
+    }
+    if (activeEl !== document.getElementById("quickProgramHosts")) {
+      document.getElementById("quickProgramHosts").value = cmsData.onAir.hosts;
+    }
+    if (activeEl !== document.getElementById("quickProgramDesc")) {
+      document.getElementById("quickProgramDesc").value = cmsData.onAir.description;
+    }
+
+    if (activeEl !== document.getElementById("settingStreamUrl")) {
+      document.getElementById("settingStreamUrl").value =
+        cmsData.onAir.streamUrl || DEFAULT_DATA.onAir.streamUrl;
+    }
+    if (activeEl !== document.getElementById("settingStreamQuality")) {
+      document.getElementById("settingStreamQuality").value =
+        cmsData.onAir.quality || "HD 128kbps";
+    }
+    if (activeEl !== document.getElementById("settingFrequency")) {
+      document.getElementById("settingFrequency").value =
+        cmsData.onAir.frequency || "101.8 FM";
+    }
+    updateAdminStreamTypeBadge(document.getElementById("settingStreamUrl").value);
+
+    renderDashboardRequests();
+    renderRequestsTab();
+    renderScheduleTab();
+    renderAnnouncersTab();
   }
 
-  if (activeEl !== document.getElementById("settingStreamUrl")) {
-    document.getElementById("settingStreamUrl").value =
-      cmsData.onAir.streamUrl || DEFAULT_DATA.onAir.streamUrl;
+  function extractCleanUrl(rawInput) {
+    if (!rawInput) return "";
+    let trimmed = String(rawInput).trim();
+    const iframeSrc = trimmed.match(/src=["']([^"']+)["']/i);
+    if (iframeSrc && iframeSrc[1]) {
+      trimmed = iframeSrc[1].trim();
+    }
+    return trimmed;
   }
-  if (activeEl !== document.getElementById("settingStreamQuality")) {
-    document.getElementById("settingStreamQuality").value =
-      cmsData.onAir.quality || "HD 128kbps";
-  }
-  if (activeEl !== document.getElementById("settingFrequency")) {
-    document.getElementById("settingFrequency").value =
-      cmsData.onAir.frequency || "101.8 FM";
-  }
-  updateAdminStreamTypeBadge(document.getElementById("settingStreamUrl").value);
 
-  renderDashboardRequests();
-  renderRequestsTab();
-  renderScheduleTab();
-  renderAnnouncersTab();
-}
-
-function extractCleanUrl(rawInput) {
-  if (!rawInput) return "";
-  let trimmed = String(rawInput).trim();
-  const iframeSrc = trimmed.match(/src=["']([^"']+)["']/i);
-  if (iframeSrc && iframeSrc[1]) {
-    trimmed = iframeSrc[1].trim();
+  export function updateAdminStreamTypeBadge(rawVal) {
+    const badge = document.getElementById("streamSourceTypeBadge");
+    if (!badge) return;
+    const val = extractCleanUrl(rawVal);
+    if (/youtube\.com|youtu\.be/i.test(val)) {
+      badge.className =
+        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 text-xs font-bold self-start sm:self-center";
+      badge.textContent = "▶️ YouTube Live / Video";
+    } else if (/soundcloud\.com/i.test(val)) {
+      badge.className =
+        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold self-start sm:self-center";
+      badge.textContent = "☁️ SoundCloud Audio";
+    } else if (/\.m3u8(\?.*)?$/i.test(val)) {
+      badge.className =
+        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold self-start sm:self-center";
+      badge.textContent = "📡 HLS Stream (.m3u8)";
+    } else {
+      badge.className =
+        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 text-brand-700 border border-orange-200 text-xs font-bold self-start sm:self-center";
+      badge.textContent = "📻 Icecast / Direct Stream";
+    }
   }
-  return trimmed;
-}
 
-export function updateAdminStreamTypeBadge(rawVal) {
-  const badge = document.getElementById("streamSourceTypeBadge");
-  if (!badge) return;
-  const val = extractCleanUrl(rawVal);
-  if (/youtube\.com|youtu\.be/i.test(val)) {
-    badge.className =
-      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 text-xs font-bold self-start sm:self-center";
-    badge.textContent = "▶️ YouTube Live / Video";
-  } else if (/soundcloud\.com/i.test(val)) {
-    badge.className =
-      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold self-start sm:self-center";
-    badge.textContent = "☁️ SoundCloud Audio";
-  } else if (/\.m3u8(\?.*)?$/i.test(val)) {
-    badge.className =
-      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold self-start sm:self-center";
-    badge.textContent = "📡 HLS Stream (.m3u8)";
-  } else {
-    badge.className =
-      "inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 text-brand-700 border border-orange-200 text-xs font-bold self-start sm:self-center";
-    badge.textContent = "📻 Icecast / Direct Stream";
+  export function applyPresetStream(url) {
+    const input = document.getElementById("settingStreamUrl");
+    if (input) {
+      input.value = url;
+      updateAdminStreamTypeBadge(url);
+    }
   }
-}
 
-export function applyPresetStream(url) {
-  const input = document.getElementById("settingStreamUrl");
-  if (input) {
-    input.value = url;
-    updateAdminStreamTypeBadge(url);
-  }
-}
-
-function renderDashboardRequests() {
-  const container = document.getElementById("dashboardRecentRequests");
-  if (!container) return;
-  if (cmsData.requests.length === 0) {
-    container.innerHTML = `<p class="text-xs text-gray-400 py-8 text-center">Belum ada pesan masuk di tabel <code class="font-mono">requests</code> Supabase.</p>`;
-    return;
-  }
-  container.innerHTML = cmsData.requests
-    .slice(0, 5)
-    .map(
-      (req) => `
+  function renderDashboardRequests() {
+    const container = document.getElementById("dashboardRecentRequests");
+    if (!container) return;
+    if (cmsData.requests.length === 0) {
+      container.innerHTML = `<p class="text-xs text-gray-400 py-8 text-center">Belum ada pesan masuk di tabel <code class="font-mono">requests</code> Supabase.</p>`;
+      return;
+    }
+    container.innerHTML = cmsData.requests
+      .slice(0, 5)
+      .map(
+        (req) => `
       <div class="p-4 rounded-2xl border ${req.read ? "bg-gray-50 border-gray-100 opacity-75" : "bg-orange-50/40 border-orange-200"
-        } flex items-start justify-between gap-4">
+          } flex items-start justify-between gap-4">
         <div class="space-y-1">
           <div class="flex items-center gap-2">
             <span class="font-bold text-sm text-gray-900">${escapeHtml(req.name)}</span>
@@ -1038,9 +1065,9 @@ function renderDashboardRequests() {
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
           <button onclick="toggleRequestRead('${req.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold ${req.read
-          ? "bg-gray-200 text-gray-600"
-          : "bg-emerald-500 text-white hover:bg-emerald-600"
-        } transition">
+            ? "bg-gray-200 text-gray-600"
+            : "bg-emerald-500 text-white hover:bg-emerald-600"
+          } transition">
             ${req.read ? "Dibaca" : "Tandai Dibaca"}
           </button>
           <button onclick="deleteRequest('${req.id}')" class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition" title="Hapus">
@@ -1049,31 +1076,31 @@ function renderDashboardRequests() {
         </div>
       </div>
     `
-    )
-    .join("");
-}
-
-function renderRequestsTab() {
-  const container = document.getElementById("adminRequestList");
-  if (!container) return;
-  let list = cmsData.requests;
-  if (requestFilter === "unread") list = list.filter((r) => !r.read);
-  if (requestFilter === "read") list = list.filter((r) => r.read);
-
-  if (list.length === 0) {
-    container.innerHTML = `<div class="bg-white rounded-3xl p-10 text-center text-sm text-gray-400 border border-gray-100">Tidak ada pesan pada kategori ini.</div>`;
-    return;
+      )
+      .join("");
   }
 
-  container.innerHTML = list
-    .map(
-      (req) => `
+  function renderRequestsTab() {
+    const container = document.getElementById("adminRequestList");
+    if (!container) return;
+    let list = cmsData.requests;
+    if (requestFilter === "unread") list = list.filter((r) => !r.read);
+    if (requestFilter === "read") list = list.filter((r) => r.read);
+
+    if (list.length === 0) {
+      container.innerHTML = `<div class="bg-white rounded-3xl p-10 text-center text-sm text-gray-400 border border-gray-100">Tidak ada pesan pada kategori ini.</div>`;
+      return;
+    }
+
+    container.innerHTML = list
+      .map(
+        (req) => `
       <div class="bg-white rounded-2xl p-5 border ${req.read ? "border-gray-100" : "border-orange-200 ring-1 ring-orange-100"
-        } shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          } shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div class="space-y-1.5">
           <div class="flex flex-wrap items-center gap-2">
             <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${req.read ? "bg-gray-100 text-gray-500" : "bg-brand-500 text-white"
-        }">
+          }">
               ${req.read ? "Sudah Dibaca" : "Baru"}
             </span>
             <span class="font-bold text-base text-gray-900">${escapeHtml(req.name)}</span>
@@ -1081,16 +1108,16 @@ function renderRequestsTab() {
             <span class="text-xs font-mono text-gray-400">(${escapeHtml(req.time)})</span>
           </div>
           ${req.song
-          ? `<div class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 bg-orange-50 border border-orange-200/60 px-2.5 py-0.5 rounded-full">🎵 ${escapeHtml(req.song)}</div>`
-          : ""
-        }
+            ? `<div class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 bg-orange-50 border border-orange-200/60 px-2.5 py-0.5 rounded-full">🎵 ${escapeHtml(req.song)}</div>`
+            : ""
+          }
           <p class="text-sm text-gray-700 leading-relaxed">"${escapeHtml(req.message)}"</p>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <button onclick="toggleRequestRead('${req.id}')" class="px-3.5 py-2 rounded-xl text-xs font-bold ${req.read
-          ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          : "bg-emerald-500 text-white hover:bg-emerald-600"
-        } transition">
+            ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            : "bg-emerald-500 text-white hover:bg-emerald-600"
+          } transition">
             ${req.read ? "Batal Tandai" : "✓ Tandai Dibaca"}
           </button>
           <button onclick="deleteRequest('${req.id}')" class="px-3 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition">
@@ -1099,33 +1126,33 @@ function renderRequestsTab() {
         </div>
       </div>
     `
-    )
-    .join("");
-}
+      )
+      .join("");
+  }
 
-function renderScheduleTab() {
-  const container = document.getElementById("adminScheduleList");
-  if (!container) return;
-  container.innerHTML = cmsData.schedules
-    .map((sch) => {
-      const isOnAir = Boolean(sch.isOnAir) || sch.status === "ON AIR";
-      return `
+  function renderScheduleTab() {
+    const container = document.getElementById("adminScheduleList");
+    if (!container) return;
+    container.innerHTML = cmsData.schedules
+      .map((sch) => {
+        const isOnAir = Boolean(sch.isOnAir) || sch.status === "ON AIR";
+        return `
         <div class="rounded-2xl p-5 border ${isOnAir
-          ? "bg-orange-50/70 border-brand-500 ring-2 ring-orange-200"
-          : "bg-white border-gray-200/80"
-        } shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            ? "bg-orange-50/70 border-brand-500 ring-2 ring-orange-200"
+            : "bg-white border-gray-200/80"
+          } shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
             <div class="flex items-center gap-2 sm:w-48 shrink-0">
               <span class="font-mono font-bold text-xs sm:text-sm ${isOnAir
-          ? "text-brand-700 bg-white px-2.5 py-1 rounded-md border border-brand-200"
-          : "text-gray-600"
-        }">${escapeHtml(sch.time)}</span>
+            ? "text-brand-700 bg-white px-2.5 py-1 rounded-md border border-brand-200"
+            : "text-gray-600"
+          }">${escapeHtml(sch.time)}</span>
               <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${isOnAir
-          ? "bg-brand-500 text-white"
-          : sch.status === "SELESAI"
-            ? "bg-gray-100 text-gray-500"
-            : "bg-blue-50 text-blue-600"
-        }">
+            ? "bg-brand-500 text-white"
+            : sch.status === "SELESAI"
+              ? "bg-gray-100 text-gray-500"
+              : "bg-blue-50 text-blue-600"
+          }">
                 ${isOnAir ? "ON AIR" : escapeHtml(sch.status || "JADWAL")}
               </span>
             </div>
@@ -1137,17 +1164,17 @@ function renderScheduleTab() {
           </div>
           <div class="flex flex-wrap items-center gap-2 shrink-0">
             ${!isOnAir
-          ? `
+            ? `
               <button onclick="setScheduleOnAir('${sch.id}')" class="px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-500 text-brand-600 hover:text-white border border-brand-200 text-xs font-bold transition">
                 Set ON AIR
               </button>
             `
-          : `
+            : `
               <span class="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
                 ● Mengudara
               </span>
             `
-        }
+          }
             <button onclick="openScheduleModal('${sch.id}')" class="px-3 py-1.5 rounded-xl border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-bold bg-white">
               Edit
             </button>
@@ -1157,21 +1184,21 @@ function renderScheduleTab() {
           </div>
         </div>
       `;
-    })
-    .join("");
-}
+      })
+      .join("");
+  }
 
-function renderAnnouncersTab() {
-  const container = document.getElementById("adminAnnouncerGrid");
-  if (!container) return;
-  container.innerHTML = cmsData.announcers
-    .map(
-      (ann) => `
+  function renderAnnouncersTab() {
+    const container = document.getElementById("adminAnnouncerGrid");
+    if (!container) return;
+    container.innerHTML = cmsData.announcers
+      .map(
+        (ann) => `
       <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col items-center text-center">
         <div class="relative w-20 h-20 mb-3">
           <img src="${escapeHtml(ann.avatar || "https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg")}" alt="${escapeHtml(ann.name)}" class="w-full h-full object-cover rounded-full ring-2 ring-orange-200 p-0.5" />
           <span class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white ${ann.online ? "bg-emerald-500" : "bg-gray-300"
-        }"></span>
+          }"></span>
         </div>
         <h3 class="font-serif text-lg font-bold text-gray-900">${escapeHtml(ann.name)}</h3>
         <span class="text-xs font-semibold text-brand-600 bg-orange-50 px-2.5 py-0.5 rounded-full border border-orange-200/60 mt-1">${escapeHtml(ann.show)}</span>
@@ -1179,9 +1206,9 @@ function renderAnnouncersTab() {
         <p class="text-xs text-gray-600 mt-2 line-clamp-2">${escapeHtml(ann.bio)}</p>
         <div class="mt-4 pt-3 w-full border-t border-gray-100 flex items-center justify-between gap-2">
           <button onclick="toggleAnnouncerOnline('${ann.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold ${ann.online
-          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-          : "bg-gray-100 text-gray-600"
-        }">
+            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+            : "bg-gray-100 text-gray-600"
+          }">
             ${ann.online ? "● On Air" : "○ Offline"}
           </button>
           <div class="flex items-center gap-1.5">
@@ -1191,759 +1218,781 @@ function renderAnnouncersTab() {
         </div>
       </div>
     `
-    )
-    .join("");
-}
+      )
+      .join("");
+  }
 
-// --- Actions: On-Air & Settings ---
-export async function saveOnAirQuickForm(e) {
-  e.preventDefault();
-  const title = document.getElementById("quickProgramTitle").value.trim();
-  const hosts = document.getElementById("quickProgramHosts").value.trim();
-  const description = document.getElementById("quickProgramDesc").value.trim();
+  // --- Actions: On-Air & Settings ---
+  export async function saveOnAirQuickForm(e) {
+    e.preventDefault();
+    const title = document.getElementById("quickProgramTitle").value.trim();
+    const hosts = document.getElementById("quickProgramHosts").value.trim();
+    const description = document.getElementById("quickProgramDesc").value.trim();
 
-  cmsData.onAir.title = title;
-  cmsData.onAir.hosts = hosts;
-  cmsData.onAir.description = description;
-  savePersistedData();
+    cmsData.onAir.title = title;
+    cmsData.onAir.hosts = hosts;
+    cmsData.onAir.description = description;
+    savePersistedData();
 
-  const activeSch =
-    cmsData.schedules.find((s) => s.isOnAir || s.status === "ON AIR") ||
-    cmsData.schedules[0];
-  if (activeSch && !String(activeSch.id).startsWith("sch-")) {
-    const updatedSched = {
-      ...activeSch,
-      title,
-      hosts,
-      description,
-      isOnAir: true
-    };
-    const { error } = await writeScheduleToSupabase(updatedSched, activeSch.id);
-    if (error) {
-      showToast("Gagal update jadwal aktif di Supabase: " + error.message, true);
+    const activeSch =
+      cmsData.schedules.find((s) => s.isOnAir || s.status === "ON AIR") ||
+      cmsData.schedules[0];
+    if (activeSch && !String(activeSch.id).startsWith("sch-")) {
+      const updatedSched = {
+        ...activeSch,
+        title,
+        hosts,
+        description,
+        isOnAir: true
+      };
+      const { error } = await writeScheduleToSupabase(updatedSched, activeSch.id);
+      if (error) {
+        showToast("Gagal update jadwal aktif di Supabase: " + error.message, true);
+        return;
+      }
+      await fetchSchedulesFromSupabase();
+      showToast("Info Sedang Mengudara diperbarui di Supabase!");
+    } else {
+      const { error } = await writeScheduleToSupabase({
+        dayName: "Setiap Hari",
+        time: "09:00 - 12:00 WIB",
+        title,
+        hosts,
+        description,
+        genre: "Live Broadcast",
+        isOnAir: true
+      });
+      if (!error) {
+        await fetchSchedulesFromSupabase();
+        showToast("Program ON AIR disimpan ke Supabase!");
+      } else {
+        renderAll();
+        showToast("Info Sedang Mengudara diperbarui!");
+      }
+    }
+  }
+
+  export async function saveStreamSettings(e) {
+    e.preventDefault();
+    const rawUrl = document.getElementById("settingStreamUrl").value.trim();
+    cmsData.onAir.streamUrl = extractCleanUrl(rawUrl);
+    cmsData.onAir.quality = document.getElementById("settingStreamQuality").value.trim();
+    cmsData.onAir.frequency = document.getElementById("settingFrequency").value.trim();
+    if (cmsData.onAir.streamUrl && !cmsData.onAir.streamUrl.includes("/radio_audio/")) {
+      try {
+        localStorage.setItem("radjafm_saved_stream_url", cmsData.onAir.streamUrl);
+      } catch (e) {}
+    }
+    savePersistedData();
+    renderAll();
+
+    try {
+      await supabaseClient.from("studio_settings").upsert([
+        {
+          id: 1,
+          stream_url: cmsData.onAir.streamUrl,
+          quality: cmsData.onAir.quality,
+          frequency: cmsData.onAir.frequency,
+          updated_at: new Date().toISOString()
+        }
+      ]);
+    } catch (err) { }
+
+    showToast("Pengaturan stream disimpan & disinkronkan ke Web Publik!");
+  }
+
+  export async function resetToDefaultData() {
+    if (!confirm("Reset pengaturan stream & penyiar ke awal dan muat ulang data Supabase?")) {
       return;
     }
-    await fetchSchedulesFromSupabase();
-    showToast("Info Sedang Mengudara diperbarui di Supabase!");
-  } else {
-    const { error } = await writeScheduleToSupabase({
-      dayName: "Setiap Hari",
-      time: "09:00 - 12:00 WIB",
-      title,
-      hosts,
-      description,
-      genre: "Live Broadcast",
-      isOnAir: true
-    });
-    if (!error) {
-      await fetchSchedulesFromSupabase();
-      showToast("Program ON AIR disimpan ke Supabase!");
-    } else {
-      renderAll();
-      showToast("Info Sedang Mengudara diperbarui!");
-    }
+    localStorage.removeItem(STORAGE_KEY);
+    cmsData = JSON.parse(JSON.stringify(DEFAULT_DATA));
+    savePersistedData();
+    await Promise.all([fetchRequestsFromSupabase(), fetchSchedulesFromSupabase()]);
+    renderAll();
+    showToast("Data berhasil direset & disinkronkan ulang!");
   }
-}
 
-export async function saveStreamSettings(e) {
-  e.preventDefault();
-  const rawUrl = document.getElementById("settingStreamUrl").value.trim();
-  cmsData.onAir.streamUrl = extractCleanUrl(rawUrl);
-  cmsData.onAir.quality = document.getElementById("settingStreamQuality").value.trim();
-  cmsData.onAir.frequency = document.getElementById("settingFrequency").value.trim();
-  savePersistedData();
-  renderAll();
+  // --- Actions: Requests ---
+  export function setRequestFilter(filter) {
+    requestFilter = filter;
+    ["all", "unread", "read"].forEach((f) => {
+      const btn = document.getElementById("filter-" + f);
+      if (!btn) return;
+      btn.className =
+        f === filter
+          ? "px-3.5 py-2 rounded-xl text-xs font-bold bg-brand-500 text-white transition"
+          : "px-3.5 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition";
+    });
+    renderRequestsTab();
+  }
 
-  try {
-    await supabaseClient.from("studio_settings").upsert([
-      {
-        id: 1,
-        stream_url: cmsData.onAir.streamUrl,
-        quality: cmsData.onAir.quality,
-        frequency: cmsData.onAir.frequency,
-        updated_at: new Date().toISOString()
+  export async function toggleRequestRead(id) {
+    const item = cmsData.requests.find((r) => String(r.id) === String(id));
+    if (!item) return;
+    const nextRead = !item.read;
+    item.read = nextRead;
+    localReadStatusMap[String(item.id)] = nextRead;
+    saveReadStatusMap();
+    renderAll();
+
+    if (Array.isArray(knownRequestColumns)) {
+      const boolCol = ["is_read", "read", "sudah_dibaca"].find((c) =>
+        knownRequestColumns.includes(c)
+      );
+      if (boolCol) {
+        await supabaseClient
+          .from("requests")
+          .update({ [boolCol]: nextRead })
+          .eq("id", item.id);
+      } else if (knownRequestColumns.includes("status")) {
+        await supabaseClient
+          .from("requests")
+          .update({ status: nextRead ? "read" : "unread" })
+          .eq("id", item.id);
       }
-    ]);
-  } catch (err) {}
-
-  showToast("Pengaturan stream disimpan & disinkronkan ke Web Publik!");
-}
-
-export async function resetToDefaultData() {
-  if (!confirm("Reset pengaturan stream & penyiar ke awal dan muat ulang data Supabase?")) {
-    return;
-  }
-  localStorage.removeItem(STORAGE_KEY);
-  cmsData = JSON.parse(JSON.stringify(DEFAULT_DATA));
-  savePersistedData();
-  await Promise.all([fetchRequestsFromSupabase(), fetchSchedulesFromSupabase()]);
-  renderAll();
-  showToast("Data berhasil direset & disinkronkan ulang!");
-}
-
-// --- Actions: Requests ---
-export function setRequestFilter(filter) {
-  requestFilter = filter;
-  ["all", "unread", "read"].forEach((f) => {
-    const btn = document.getElementById("filter-" + f);
-    if (!btn) return;
-    btn.className =
-      f === filter
-        ? "px-3.5 py-2 rounded-xl text-xs font-bold bg-brand-500 text-white transition"
-        : "px-3.5 py-2 rounded-xl text-xs font-bold bg-gray-100 text-gray-600 hover:bg-gray-200 transition";
-  });
-  renderRequestsTab();
-}
-
-export async function toggleRequestRead(id) {
-  const item = cmsData.requests.find((r) => String(r.id) === String(id));
-  if (!item) return;
-  const nextRead = !item.read;
-  item.read = nextRead;
-  localReadStatusMap[String(item.id)] = nextRead;
-  saveReadStatusMap();
-  renderAll();
-
-  if (Array.isArray(knownRequestColumns)) {
-    const boolCol = ["is_read", "read", "sudah_dibaca"].find((c) =>
-      knownRequestColumns.includes(c)
-    );
-    if (boolCol) {
-      await supabaseClient
-        .from("requests")
-        .update({ [boolCol]: nextRead })
-        .eq("id", item.id);
-    } else if (knownRequestColumns.includes("status")) {
-      await supabaseClient
-        .from("requests")
-        .update({ status: nextRead ? "read" : "unread" })
-        .eq("id", item.id);
     }
+    showToast(nextRead ? "Pesan ditandai sudah dibaca (Tersimpan)" : "Status baca dibatalkan");
   }
-  showToast(nextRead ? "Pesan ditandai sudah dibaca (Tersimpan)" : "Status baca dibatalkan");
-}
 
-export async function deleteRequest(id) {
-  const prev = [...cmsData.requests];
-  cmsData.requests = cmsData.requests.filter((r) => String(r.id) !== String(id));
-  delete localReadStatusMap[String(id)];
-  saveReadStatusMap();
-  renderAll();
-
-  const { error } = await supabaseClient.from("requests").delete().eq("id", id);
-  if (error) {
-    cmsData.requests = prev;
+  export async function deleteRequest(id) {
+    const prev = [...cmsData.requests];
+    cmsData.requests = cmsData.requests.filter((r) => String(r.id) !== String(id));
+    delete localReadStatusMap[String(id)];
+    saveReadStatusMap();
     renderAll();
-    showToast("Gagal menghapus pesan: " + error.message, true);
-    return;
-  }
-  showToast("Pesan dihapus dari Supabase");
-}
 
-export function openAddShoutoutModal() {
-  document.getElementById("admShoutName").value = "";
-  document.getElementById("admShoutLoc").value = "";
-  document.getElementById("admShoutSong").value = "";
-  document.getElementById("admShoutMsg").value = "";
-  openModal("modalShoutout");
-}
-
-export async function submitAdminShoutout(e) {
-  e.preventDefault();
-  const name = document.getElementById("admShoutName").value.trim();
-  const location =
-    document.getElementById("admShoutLoc").value.trim() || "Studio RADJAfm";
-  const song = document.getElementById("admShoutSong").value.trim();
-  const message = document.getElementById("admShoutMsg").value.trim();
-
-  const { data, error } = await insertRequestToSupabase(name, location, song, message);
-  if (error) {
-    showToast("Gagal mengirim salam ke Supabase: " + error.message, true);
-    return;
-  }
-  closeModal("modalShoutout");
-  if (data && data[0]) {
-    const inserted = normalizeRequestRow(data[0]);
-    if (!cmsData.requests.some((r) => String(r.id) === String(inserted.id))) {
-      cmsData.requests.unshift(inserted);
+    const { error } = await supabaseClient.from("requests").delete().eq("id", id);
+    if (error) {
+      cmsData.requests = prev;
+      renderAll();
+      showToast("Gagal menghapus pesan: " + error.message, true);
+      return;
     }
-    renderAll();
-  } else {
-    await fetchRequestsFromSupabase();
-  }
-  showToast("Salam baru ditambahkan ke Supabase Live Feed!");
-}
-
-// --- Actions: Schedule ---
-export async function seedDefaultSchedulesToSupabase() {
-  const btn = document.getElementById("btnSeedSchedules");
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "Menyimpan ke Supabase...";
-  }
-  for (const item of DEFAULT_DATA.schedules) {
-    await writeScheduleToSupabase(item);
-  }
-  if (btn) {
-    btn.disabled = false;
-    btn.textContent = "⚡ Isi 6 Jadwal Awal ke Supabase";
-  }
-  await fetchSchedulesFromSupabase();
-  showToast("6 Jadwal awal berhasil disimpan ke Supabase!");
-}
-
-export async function setScheduleOnAir(id) {
-  const target = cmsData.schedules.find((s) => String(s.id) === String(id));
-  if (!target) return;
-
-  if (String(id).startsWith("sch-")) {
-    DEFAULT_DATA.schedules.forEach((s) => {
-      s.isOnAir = s.id === id;
-      s.status = s.isOnAir ? "ON AIR" : "NANTI";
-    });
-    await seedDefaultSchedulesToSupabase();
-    return;
+    showToast("Pesan dihapus dari Supabase");
   }
 
-  const { error: resetErr } = await supabaseClient
-    .from("schedules")
-    .update({ is_on_air: false })
-    .eq("is_on_air", true);
-
-  if (resetErr) {
-    console.warn("Reset is_on_air warning:", resetErr.message);
+  export function openAddShoutoutModal() {
+    document.getElementById("admShoutName").value = "";
+    document.getElementById("admShoutLoc").value = "";
+    document.getElementById("admShoutSong").value = "";
+    document.getElementById("admShoutMsg").value = "";
+    openModal("modalShoutout");
   }
 
-  const { error: setErr } = await supabaseClient
-    .from("schedules")
-    .update({ is_on_air: true })
-    .eq("id", id);
+  export async function submitAdminShoutout(e) {
+    e.preventDefault();
+    const name = document.getElementById("admShoutName").value.trim();
+    const location =
+      document.getElementById("admShoutLoc").value.trim() || "Studio RADJAfm";
+    const song = document.getElementById("admShoutSong").value.trim();
+    const message = document.getElementById("admShoutMsg").value.trim();
 
-  if (setErr) {
-    showToast("Gagal mengupdate status ON AIR di Supabase: " + setErr.message, true);
-    return;
+    const { data, error } = await insertRequestToSupabase(name, location, song, message);
+    if (error) {
+      showToast("Gagal mengirim salam ke Supabase: " + error.message, true);
+      return;
+    }
+    closeModal("modalShoutout");
+    if (data && data[0]) {
+      const inserted = normalizeRequestRow(data[0]);
+      if (!cmsData.requests.some((r) => String(r.id) === String(inserted.id))) {
+        cmsData.requests.unshift(inserted);
+      }
+      renderAll();
+    } else {
+      await fetchRequestsFromSupabase();
+    }
+    showToast("Salam baru ditambahkan ke Supabase Live Feed!");
   }
 
-  await fetchSchedulesFromSupabase();
-  showToast('Program "' + target.title + '" sekarang ON AIR di Supabase!');
-}
-
-export function openScheduleModal(editId) {
-  const modalTitle = document.getElementById("modalScheduleTitle");
-  if (editId) {
-    const s = cmsData.schedules.find((x) => String(x.id) === String(editId));
-    if (!s) return;
-    modalTitle.textContent = "Edit Jadwal Siaran";
-    document.getElementById("schedEditId").value = s.id;
-    document.getElementById("schedTime").value = s.time;
-    document.getElementById("schedStatus").value =
-      s.isOnAir || s.status === "ON AIR" ? "ON AIR" : s.status || "NANTI";
-    document.getElementById("schedTitle").value = s.title;
-    document.getElementById("schedHosts").value = s.hosts;
-    document.getElementById("schedGenre").value =
-      s.genre || s.dayName || "Setiap Hari";
-    document.getElementById("schedDesc").value = s.description;
-  } else {
-    modalTitle.textContent = "Tambah Jadwal Siaran";
-    document.getElementById("schedEditId").value = "";
-    document.getElementById("schedTime").value = "";
-    document.getElementById("schedStatus").value = "NANTI";
-    document.getElementById("schedTitle").value = "";
-    document.getElementById("schedHosts").value = "";
-    document.getElementById("schedGenre").value = "Setiap Hari";
-    document.getElementById("schedDesc").value = "";
+  // --- Actions: Schedule ---
+  export async function seedDefaultSchedulesToSupabase() {
+    const btn = document.getElementById("btnSeedSchedules");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Menyimpan ke Supabase...";
+    }
+    for (const item of DEFAULT_DATA.schedules) {
+      await writeScheduleToSupabase(item);
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "⚡ Isi 6 Jadwal Awal ke Supabase";
+    }
+    await fetchSchedulesFromSupabase();
+    showToast("6 Jadwal awal berhasil disimpan ke Supabase!");
   }
-  openModal("modalSchedule");
-}
 
-export async function submitScheduleForm(e) {
-  e.preventDefault();
-  const editId = document.getElementById("schedEditId").value;
-  const statusVal = document.getElementById("schedStatus").value;
-  const isOnAir = statusVal === "ON AIR";
+  export async function setScheduleOnAir(id) {
+    const target = cmsData.schedules.find((s) => String(s.id) === String(id));
+    if (!target) return;
 
-  const parsedTime = parseAndNormalizeScheduleTime(
-    document.getElementById("schedTime").value
-  );
-  const schedObj = {
-    dayName: document.getElementById("schedGenre").value.trim() || "Setiap Hari",
-    time: parsedTime.displayTime,
-    status: statusVal,
-    isOnAir: isOnAir,
-    title: document.getElementById("schedTitle").value.trim(),
-    hosts: document.getElementById("schedHosts").value.trim(),
-    genre: document.getElementById("schedGenre").value.trim(),
-    description: document.getElementById("schedDesc").value.trim()
-  };
+    if (String(id).startsWith("sch-")) {
+      DEFAULT_DATA.schedules.forEach((s) => {
+        s.isOnAir = s.id === id;
+        s.status = s.isOnAir ? "ON AIR" : "NANTI";
+      });
+      await seedDefaultSchedulesToSupabase();
+      return;
+    }
 
-  if (isOnAir) {
-    await supabaseClient
+    const { error: resetErr } = await supabaseClient
       .from("schedules")
       .update({ is_on_air: false })
       .eq("is_on_air", true);
-  }
 
-  const isExistingDbRow = editId && !String(editId).startsWith("sch-");
-  const { error } = await writeScheduleToSupabase(
-    schedObj,
-    isExistingDbRow ? editId : null
-  );
-
-  if (error) {
-    showToast("Gagal menyimpan jadwal ke Supabase: " + error.message, true);
-    return;
-  }
-
-  closeModal("modalSchedule");
-  await fetchSchedulesFromSupabase();
-  showToast("Jadwal siaran disimpan ke Supabase!");
-}
-
-export async function deleteSchedule(id) {
-  if (String(id).startsWith("sch-")) {
-    cmsData.schedules = cmsData.schedules.filter((s) => String(s.id) !== String(id));
-    renderAll();
-    showToast("Jadwal dihapus");
-    return;
-  }
-
-  const { error } = await supabaseClient.from("schedules").delete().eq("id", id);
-  if (error) {
-    showToast("Gagal menghapus jadwal dari Supabase: " + error.message, true);
-    return;
-  }
-  delete localScheduleMetaMap[String(id)];
-  saveScheduleMetaMap();
-  await fetchSchedulesFromSupabase();
-  showToast("Jadwal dihapus dari Supabase!");
-}
-
-// --- Actions: Announcers ---
-export async function toggleAnnouncerOnline(id) {
-  const ann = cmsData.announcers.find((a) => String(a.id) === String(id));
-  if (ann) {
-    ann.online = !ann.online;
-    savePersistedData();
-    renderAll();
-    try {
-      await supabaseClient
-        .from("announcers")
-        .update({ online: ann.online })
-        .eq("id", ann.id);
-    } catch (err) {}
-    showToast("Status penyiar diperbarui & disimpan!");
-  }
-}
-
-const DEFAULT_ANNOUNCER_AVATAR =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuA-TvNM2ZZPV_JMS5zwOAZe1YItf-Spcs4hdDFpYQKpFgtJys8pMS13JBrbRsq8VjBxcEg_FfcA9YFi6fRALesM5fWrLvIto2Hjs9IkmaK8DweWDwAzltWaboplviRD01jqFDWbNrUlPLnY1Y8rnAi95i77-FA6uZZURSLY6fJXs7kglOGdZNErNTreLAlKboC2zUG1k2d4LFEbt2YH0gh4uy77dWPPP7I86zQcllAl";
-
-export function handleAnnouncerAvatarUpload(e) {
-  const file = e.target?.files?.[0];
-  if (!file) return;
-
-  if (!file.type.startsWith("image/")) {
-    showToast("Pilih file gambar yang valid (.jpg, .png, .webp)", true);
-    return;
-  }
-
-  const infoEl = document.getElementById("annAvatarFileInfo");
-  if (infoEl) infoEl.textContent = "Memproses foto: " + file.name + "...";
-
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    const rawDataUrl = ev.target?.result;
-    if (!rawDataUrl) return;
-
-    const img = new Image();
-    img.onload = () => {
-      // Resize & center-crop ke 360x360 agar ringan disimpan di localStorage
-      const size = 360;
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-
-      const minDim = Math.min(img.width, img.height);
-      const sx = (img.width - minDim) / 2;
-      const sy = (img.height - minDim) / 2;
-
-      ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
-      const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.84);
-
-      const hiddenInp = document.getElementById("annAvatar");
-      const previewImg = document.getElementById("annAvatarPreview");
-      if (hiddenInp) hiddenInp.value = compressedDataUrl;
-      if (previewImg) previewImg.src = compressedDataUrl;
-      if (infoEl) infoEl.textContent = "✓ Foto siap disimpan (" + file.name + ")";
-    };
-    img.onerror = () => {
-      const hiddenInp = document.getElementById("annAvatar");
-      const previewImg = document.getElementById("annAvatarPreview");
-      if (hiddenInp) hiddenInp.value = String(rawDataUrl);
-      if (previewImg) previewImg.src = String(rawDataUrl);
-      if (infoEl) infoEl.textContent = "✓ Foto dipilih (" + file.name + ")";
-    };
-    img.src = String(rawDataUrl);
-  };
-  reader.readAsDataURL(file);
-}
-
-export function openAnnouncerModal(editId) {
-  const modalTitle = document.getElementById("modalAnnouncerTitle");
-  const fileInp = document.getElementById("annAvatarFile");
-  const previewImg = document.getElementById("annAvatarPreview");
-  const infoEl = document.getElementById("annAvatarFileInfo");
-  if (fileInp) fileInp.value = "";
-
-  if (editId) {
-    const a = cmsData.announcers.find((x) => x.id === editId);
-    if (!a) return;
-    modalTitle.textContent = "Edit Profil Penyiar";
-    document.getElementById("annEditId").value = a.id;
-    document.getElementById("annName").value = a.name;
-    document.getElementById("annShow").value = a.show;
-    document.getElementById("annTime").value = a.time;
-    document.getElementById("annTag").value = a.tag;
-    document.getElementById("annSocial").value = a.social;
-    document.getElementById("annAvatar").value = a.avatar || DEFAULT_ANNOUNCER_AVATAR;
-    if (previewImg) previewImg.src = a.avatar || DEFAULT_ANNOUNCER_AVATAR;
-    if (infoEl) infoEl.textContent = "Pilih file baru jika ingin mengganti foto profil";
-    document.getElementById("annBio").value = a.bio;
-    document.getElementById("annOnline").checked = !!a.online;
-  } else {
-    modalTitle.textContent = "Tambah Penyiar Baru";
-    document.getElementById("annEditId").value = "";
-    document.getElementById("annName").value = "";
-    document.getElementById("annShow").value = "";
-    document.getElementById("annTime").value = "";
-    document.getElementById("annTag").value = "Host RADJAfm";
-    document.getElementById("annSocial").value = "@radjafm";
-    document.getElementById("annAvatar").value = "";
-    if (previewImg) previewImg.src = DEFAULT_ANNOUNCER_AVATAR;
-    if (infoEl) infoEl.textContent = "Pilih foto (.jpg, .png, .webp) dari perangkat Anda";
-    document.getElementById("annBio").value = "";
-    document.getElementById("annOnline").checked = false;
-  }
-  openModal("modalAnnouncer");
-}
-
-export async function submitAnnouncerForm(e) {
-  e.preventDefault();
-  const editId = document.getElementById("annEditId").value;
-  const payload = {
-    id: editId || "ann-" + Date.now(),
-    name: document.getElementById("annName").value.trim(),
-    show: document.getElementById("annShow").value.trim(),
-    time: document.getElementById("annTime").value.trim(),
-    tag: document.getElementById("annTag").value.trim(),
-    social: document.getElementById("annSocial").value.trim(),
-    avatar: document.getElementById("annAvatar").value.trim() || DEFAULT_ANNOUNCER_AVATAR,
-    bio: document.getElementById("annBio").value.trim(),
-    online: document.getElementById("annOnline").checked
-  };
-
-  if (editId) {
-    const idx = cmsData.announcers.findIndex((x) => String(x.id) === String(editId));
-    if (idx !== -1) cmsData.announcers[idx] = payload;
-  } else {
-    cmsData.announcers.push(payload);
-  }
-  savePersistedData();
-  closeModal("modalAnnouncer");
-  renderAll();
-
-  try {
-    await supabaseClient.from("announcers").upsert([payload]);
-  } catch (err) {}
-
-  showToast("Profil penyiar disimpan & disinkronkan ke Web Publik!");
-}
-
-export async function deleteAnnouncer(id) {
-  cmsData.announcers = cmsData.announcers.filter((a) => String(a.id) !== String(id));
-  savePersistedData();
-  renderAll();
-  try {
-    await supabaseClient.from("announcers").delete().eq("id", id);
-  } catch (err) {}
-  showToast("Penyiar dihapus & disimpan!");
-}
-
-// --- Supabase Auth & Session Management (Pure RLS-Ready Auth) ---
-function translateAuthError(error) {
-  const msg = String(error?.message || "").toLowerCase();
-  if (msg.includes("invalid login credentials")) {
-    return "Email atau password salah. Pastikan akun terdaftar di Supabase Authentication.";
-  }
-  if (msg.includes("email not confirmed")) {
-    return "Email belum dikonfirmasi. Periksa inbox email atau nonaktifkan Confirm Email di Supabase Auth.";
-  }
-  if (msg.includes("too many requests") || msg.includes("rate limit")) {
-    return "Terlalu banyak percobaan login. Silakan tunggu beberapa saat lalu coba lagi.";
-  }
-  if (msg.includes("network") || msg.includes("fetch")) {
-    return "Gagal terhubung ke server Supabase. Periksa koneksi internet Anda.";
-  }
-  return error?.message || "Gagal melakukan autentikasi ke Supabase.";
-}
-
-function lockAdminDashboard(reasonMessage = "") {
-  const passEl = document.getElementById("loginPassword");
-  if (passEl) {
-    passEl.value = "";
-    passEl.type = "password";
-  }
-  const eyeOff = document.getElementById("iconLoginEyeOff");
-  const eyeOpen = document.getElementById("iconLoginEyeOpen");
-  if (eyeOff) eyeOff.classList.remove("hidden");
-  if (eyeOpen) eyeOpen.classList.add("hidden");
-
-  const errBox = document.getElementById("loginErrorBox");
-  const errText = document.getElementById("loginErrorText");
-  if (errBox && errText) {
-    if (reasonMessage) {
-      errText.textContent = reasonMessage;
-      errBox.classList.remove("hidden");
-    } else {
-      errBox.classList.add("hidden");
+    if (resetErr) {
+      console.warn("Reset is_on_air warning:", resetErr.message);
     }
-  }
 
-  const overlay = document.getElementById("adminLoginOverlay");
-  if (overlay) {
-    overlay.classList.remove("hidden");
-    overlay.classList.add("flex");
-  }
-}
+    const { error: setErr } = await supabaseClient
+      .from("schedules")
+      .update({ is_on_air: true })
+      .eq("id", id);
 
-function unlockAdminDashboard(userEmail) {
-  const overlay = document.getElementById("adminLoginOverlay");
-  if (overlay) {
-    overlay.classList.add("hidden");
-    overlay.classList.remove("flex");
-  }
-  const sidebarUser = document.getElementById("sidebarAdminUser");
-  if (sidebarUser) {
-    sidebarUser.textContent = userEmail || "Admin Terautentikasi";
-  }
-
-  const userInp = document.getElementById("settingAdminUsername");
-  const passInp = document.getElementById("settingAdminPassword");
-  if (userInp) userInp.value = userEmail || "";
-  if (passInp) passInp.value = "";
-
-  renderAll();
-  fetchSchedulesFromSupabase();
-  fetchRequestsFromSupabase();
-  fetchStudioSettingsAndAnnouncersFromSupabase();
-  if (!realtimeInitialized) {
-    realtimeInitialized = true;
-    initSupabaseRealtime();
-  }
-}
-
-function initAuthStateListener() {
-  if (authListenerInitialized) return;
-  authListenerInitialized = true;
-
-  supabaseClient.auth.onAuthStateChange((event, session) => {
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-      if (session?.user) {
-        unlockAdminDashboard(session.user.email);
-      }
-    } else if (event === "SIGNED_OUT") {
-      lockAdminDashboard();
-    }
-  });
-}
-
-export async function checkAdminAuth() {
-  initAuthStateListener();
-  try {
-    // Hapus sisa data kredensial lokal lama jika masih ada di browser
-    localStorage.removeItem("radjafm_admin_credentials_v1");
-    localStorage.removeItem("radjafm_admin_session_v1");
-    sessionStorage.removeItem("radjafm_admin_session_v1");
-
-    const { data, error } = await supabaseClient.auth.getSession();
-    if (!error && data?.session?.user) {
-      unlockAdminDashboard(data.session.user.email);
-      return true;
-    }
-  } catch (err) {
-    console.warn("Gagal memeriksa sesi Supabase Auth:", err);
-  }
-
-  lockAdminDashboard();
-  return false;
-}
-
-export async function handleAdminLogin(e) {
-  e.preventDefault();
-  const userEl = document.getElementById("loginUsername");
-  const passEl = document.getElementById("loginPassword");
-  const errBox = document.getElementById("loginErrorBox");
-  const errText = document.getElementById("loginErrorText");
-  const submitBtn = document.getElementById("btnSubmitLogin");
-
-  const email = (userEl?.value || "").trim();
-  const password = passEl?.value || "";
-
-  if (errBox) errBox.classList.add("hidden");
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = "<span>Memverifikasi Sesi Supabase...</span>";
-  }
-
-  try {
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (error || !data?.session?.user) {
-      if (errBox && errText) {
-        errText.textContent = translateAuthError(error);
-        errBox.classList.remove("hidden");
-      }
+    if (setErr) {
+      showToast("Gagal mengupdate status ON AIR di Supabase: " + setErr.message, true);
       return;
     }
 
-    unlockAdminDashboard(data.session.user.email);
-    showToast("Login berhasil! Sesi Admin Supabase aktif.");
-  } catch (err) {
-    if (errBox && errText) {
-      errText.textContent = translateAuthError(err);
-      errBox.classList.remove("hidden");
+    await fetchSchedulesFromSupabase();
+    showToast('Program "' + target.title + '" sekarang ON AIR di Supabase!');
+  }
+
+  export function openScheduleModal(editId) {
+    const modalTitle = document.getElementById("modalScheduleTitle");
+    if (editId) {
+      const s = cmsData.schedules.find((x) => String(x.id) === String(editId));
+      if (!s) return;
+      modalTitle.textContent = "Edit Jadwal Siaran";
+      document.getElementById("schedEditId").value = s.id;
+      document.getElementById("schedTime").value = s.time;
+      document.getElementById("schedStatus").value =
+        s.isOnAir || s.status === "ON AIR" ? "ON AIR" : s.status || "NANTI";
+      document.getElementById("schedTitle").value = s.title;
+      document.getElementById("schedHosts").value = s.hosts;
+      document.getElementById("schedGenre").value =
+        s.genre || s.dayName || "Setiap Hari";
+      document.getElementById("schedDesc").value = s.description;
+    } else {
+      modalTitle.textContent = "Tambah Jadwal Siaran";
+      document.getElementById("schedEditId").value = "";
+      document.getElementById("schedTime").value = "";
+      document.getElementById("schedStatus").value = "NANTI";
+      document.getElementById("schedTitle").value = "";
+      document.getElementById("schedHosts").value = "";
+      document.getElementById("schedGenre").value = "Setiap Hari";
+      document.getElementById("schedDesc").value = "";
     }
-  } finally {
+    openModal("modalSchedule");
+  }
+
+  export async function submitScheduleForm(e) {
+    e.preventDefault();
+    const editId = document.getElementById("schedEditId").value;
+    const statusVal = document.getElementById("schedStatus").value;
+    const isOnAir = statusVal === "ON AIR";
+
+    const parsedTime = parseAndNormalizeScheduleTime(
+      document.getElementById("schedTime").value
+    );
+    const schedObj = {
+      dayName: document.getElementById("schedGenre").value.trim() || "Setiap Hari",
+      time: parsedTime.displayTime,
+      status: statusVal,
+      isOnAir: isOnAir,
+      title: document.getElementById("schedTitle").value.trim(),
+      hosts: document.getElementById("schedHosts").value.trim(),
+      genre: document.getElementById("schedGenre").value.trim(),
+      description: document.getElementById("schedDesc").value.trim()
+    };
+
+    if (isOnAir) {
+      await supabaseClient
+        .from("schedules")
+        .update({ is_on_air: false })
+        .eq("is_on_air", true);
+    }
+
+    const isExistingDbRow = editId && !String(editId).startsWith("sch-");
+    const { error } = await writeScheduleToSupabase(
+      schedObj,
+      isExistingDbRow ? editId : null
+    );
+
+    if (error) {
+      showToast("Gagal menyimpan jadwal ke Supabase: " + error.message, true);
+      return;
+    }
+
+    closeModal("modalSchedule");
+    await fetchSchedulesFromSupabase();
+    showToast("Jadwal siaran disimpan ke Supabase!");
+  }
+
+  export async function deleteSchedule(id) {
+    if (String(id).startsWith("sch-")) {
+      cmsData.schedules = cmsData.schedules.filter((s) => String(s.id) !== String(id));
+      renderAll();
+      showToast("Jadwal dihapus");
+      return;
+    }
+
+    const { error } = await supabaseClient.from("schedules").delete().eq("id", id);
+    if (error) {
+      showToast("Gagal menghapus jadwal dari Supabase: " + error.message, true);
+      return;
+    }
+    delete localScheduleMetaMap[String(id)];
+    saveScheduleMetaMap();
+    await fetchSchedulesFromSupabase();
+    showToast("Jadwal dihapus dari Supabase!");
+  }
+
+  // --- Actions: Announcers ---
+  export async function toggleAnnouncerOnline(id) {
+    const ann = cmsData.announcers.find((a) => String(a.id) === String(id));
+    if (ann) {
+      ann.online = !ann.online;
+      savePersistedData();
+      renderAll();
+      try {
+        await supabaseClient
+          .from("announcers")
+          .update({ online: ann.online })
+          .eq("id", ann.id);
+      } catch (err) { }
+      showToast("Status penyiar diperbarui & disimpan!");
+    }
+  }
+
+  const DEFAULT_ANNOUNCER_AVATAR =
+    "https://lh3.googleusercontent.com/aida-public/AB6AXuA-TvNM2ZZPV_JMS5zwOAZe1YItf-Spcs4hdDFpYQKpFgtJys8pMS13JBrbRsq8VjBxcEg_FfcA9YFi6fRALesM5fWrLvIto2Hjs9IkmaK8DweWDwAzltWaboplviRD01jqFDWbNrUlPLnY1Y8rnAi95i77-FA6uZZURSLY6fJXs7kglOGdZNErNTreLAlKboC2zUG1k2d4LFEbt2YH0gh4uy77dWPPP7I86zQcllAl";
+
+  export function handleAnnouncerAvatarUpload(e) {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("Pilih file gambar yang valid (.jpg, .png, .webp)", true);
+      return;
+    }
+
+    const infoEl = document.getElementById("annAvatarFileInfo");
+    if (infoEl) infoEl.textContent = "Memproses foto: " + file.name + "...";
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const rawDataUrl = ev.target?.result;
+      if (!rawDataUrl) return;
+
+      const img = new Image();
+      img.onload = () => {
+        // Resize & center-crop ke 360x360 agar ringan disimpan di localStorage
+        const size = 360;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+
+        const minDim = Math.min(img.width, img.height);
+        const sx = (img.width - minDim) / 2;
+        const sy = (img.height - minDim) / 2;
+
+        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+        const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.84);
+
+        const hiddenInp = document.getElementById("annAvatar");
+        const previewImg = document.getElementById("annAvatarPreview");
+        if (hiddenInp) hiddenInp.value = compressedDataUrl;
+        if (previewImg) previewImg.src = compressedDataUrl;
+        if (infoEl) infoEl.textContent = "✓ Foto siap disimpan (" + file.name + ")";
+      };
+      img.onerror = () => {
+        const hiddenInp = document.getElementById("annAvatar");
+        const previewImg = document.getElementById("annAvatarPreview");
+        if (hiddenInp) hiddenInp.value = String(rawDataUrl);
+        if (previewImg) previewImg.src = String(rawDataUrl);
+        if (infoEl) infoEl.textContent = "✓ Foto dipilih (" + file.name + ")";
+      };
+      img.src = String(rawDataUrl);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  export function openAnnouncerModal(editId) {
+    const modalTitle = document.getElementById("modalAnnouncerTitle");
+    const fileInp = document.getElementById("annAvatarFile");
+    const previewImg = document.getElementById("annAvatarPreview");
+    const infoEl = document.getElementById("annAvatarFileInfo");
+    if (fileInp) fileInp.value = "";
+
+    if (editId) {
+      const a = cmsData.announcers.find((x) => x.id === editId);
+      if (!a) return;
+      modalTitle.textContent = "Edit Profil Penyiar";
+      document.getElementById("annEditId").value = a.id;
+      document.getElementById("annName").value = a.name;
+      document.getElementById("annShow").value = a.show;
+      document.getElementById("annTime").value = a.time;
+      document.getElementById("annTag").value = a.tag;
+      document.getElementById("annSocial").value = a.social;
+      document.getElementById("annAvatar").value = a.avatar || DEFAULT_ANNOUNCER_AVATAR;
+      if (previewImg) previewImg.src = a.avatar || DEFAULT_ANNOUNCER_AVATAR;
+      if (infoEl) infoEl.textContent = "Pilih file baru jika ingin mengganti foto profil";
+      document.getElementById("annBio").value = a.bio;
+      document.getElementById("annOnline").checked = !!a.online;
+    } else {
+      modalTitle.textContent = "Tambah Penyiar Baru";
+      document.getElementById("annEditId").value = "";
+      document.getElementById("annName").value = "";
+      document.getElementById("annShow").value = "";
+      document.getElementById("annTime").value = "";
+      document.getElementById("annTag").value = "Host RADJAfm";
+      document.getElementById("annSocial").value = "@radjafm";
+      document.getElementById("annAvatar").value = "";
+      if (previewImg) previewImg.src = DEFAULT_ANNOUNCER_AVATAR;
+      if (infoEl) infoEl.textContent = "Pilih foto (.jpg, .png, .webp) dari perangkat Anda";
+      document.getElementById("annBio").value = "";
+      document.getElementById("annOnline").checked = false;
+    }
+    openModal("modalAnnouncer");
+  }
+
+  export async function submitAnnouncerForm(e) {
+    e.preventDefault();
+    const editId = document.getElementById("annEditId").value;
+    const payload = {
+      id: editId || "ann-" + Date.now(),
+      name: document.getElementById("annName").value.trim(),
+      show: document.getElementById("annShow").value.trim(),
+      time: document.getElementById("annTime").value.trim(),
+      tag: document.getElementById("annTag").value.trim(),
+      social: document.getElementById("annSocial").value.trim(),
+      avatar: document.getElementById("annAvatar").value.trim() || DEFAULT_ANNOUNCER_AVATAR,
+      bio: document.getElementById("annBio").value.trim(),
+      online: document.getElementById("annOnline").checked
+    };
+
+    if (editId) {
+      const idx = cmsData.announcers.findIndex((x) => String(x.id) === String(editId));
+      if (idx !== -1) cmsData.announcers[idx] = payload;
+    } else {
+      cmsData.announcers.push(payload);
+    }
+    savePersistedData();
+    closeModal("modalAnnouncer");
+    renderAll();
+
+    try {
+      await supabaseClient.from("announcers").upsert([payload]);
+    } catch (err) { }
+
+    showToast("Profil penyiar disimpan & disinkronkan ke Web Publik!");
+  }
+
+  export async function deleteAnnouncer(id) {
+    cmsData.announcers = cmsData.announcers.filter((a) => String(a.id) !== String(id));
+    savePersistedData();
+    renderAll();
+    try {
+      await supabaseClient.from("announcers").delete().eq("id", id);
+    } catch (err) { }
+    showToast("Penyiar dihapus & disimpan!");
+  }
+
+  // --- Supabase Auth & Session Management (Pure RLS-Ready Auth) ---
+  function translateAuthError(error) {
+    const msg = String(error?.message || "").toLowerCase();
+    if (msg.includes("invalid login credentials")) {
+      return "Email atau password salah. Pastikan akun terdaftar di Supabase Authentication.";
+    }
+    if (msg.includes("email not confirmed")) {
+      return "Email belum dikonfirmasi. Periksa inbox email atau nonaktifkan Confirm Email di Supabase Auth.";
+    }
+    if (msg.includes("too many requests") || msg.includes("rate limit")) {
+      return "Terlalu banyak percobaan login. Silakan tunggu beberapa saat lalu coba lagi.";
+    }
+    if (msg.includes("network") || msg.includes("fetch")) {
+      return "Gagal terhubung ke server Supabase. Periksa koneksi internet Anda.";
+    }
+    return error?.message || "Gagal melakukan autentikasi ke Supabase.";
+  }
+
+  function lockAdminDashboard(reasonMessage = "") {
+    const passEl = document.getElementById("loginPassword");
+    if (passEl) {
+      passEl.value = "";
+      passEl.type = "password";
+    }
+    const eyeOff = document.getElementById("iconLoginEyeOff");
+    const eyeOpen = document.getElementById("iconLoginEyeOpen");
+    if (eyeOff) eyeOff.classList.remove("hidden");
+    if (eyeOpen) eyeOpen.classList.add("hidden");
+
+    const errBox = document.getElementById("loginErrorBox");
+    const errText = document.getElementById("loginErrorText");
+    if (errBox && errText) {
+      if (reasonMessage) {
+        errText.textContent = reasonMessage;
+        errBox.classList.remove("hidden");
+      } else {
+        errBox.classList.add("hidden");
+      }
+    }
+
+    const overlay = document.getElementById("adminLoginOverlay");
+    if (overlay) {
+      overlay.classList.remove("hidden");
+      overlay.classList.add("flex");
+    }
+  }
+
+  function unlockAdminDashboard(userEmail) {
+    const overlay = document.getElementById("adminLoginOverlay");
+    if (overlay) {
+      overlay.classList.add("hidden");
+      overlay.classList.remove("flex");
+    }
+    const sidebarUser = document.getElementById("sidebarAdminUser");
+    if (sidebarUser) {
+      sidebarUser.textContent = userEmail || "Admin Terautentikasi";
+    }
+
+    const userInp = document.getElementById("settingAdminUsername");
+    const passInp = document.getElementById("settingAdminPassword");
+    if (userInp) userInp.value = userEmail || "";
+    if (passInp) passInp.value = "";
+
+    renderAll();
+    fetchSchedulesFromSupabase();
+    fetchRequestsFromSupabase();
+    fetchStudioSettingsAndAnnouncersFromSupabase();
+    initAutoDjManager();
+    if (!realtimeInitialized) {
+      realtimeInitialized = true;
+      initSupabaseRealtime();
+    }
+  }
+
+  function initAuthStateListener() {
+    if (authListenerInitialized) return;
+    authListenerInitialized = true;
+
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        if (session?.user) {
+          unlockAdminDashboard(session.user.email);
+        }
+      } else if (event === "SIGNED_OUT") {
+        lockAdminDashboard();
+      }
+    });
+  }
+
+  export async function checkAdminAuth() {
+    initAuthStateListener();
+    try {
+      // Hapus sisa data kredensial lokal lama jika masih ada di browser
+      localStorage.removeItem("radjafm_admin_credentials_v1");
+      localStorage.removeItem("radjafm_admin_session_v1");
+      sessionStorage.removeItem("radjafm_admin_session_v1");
+
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (!error && data?.session?.user) {
+        unlockAdminDashboard(data.session.user.email);
+        return true;
+      }
+    } catch (err) {
+      console.warn("Gagal memeriksa sesi Supabase Auth:", err);
+    }
+
+    lockAdminDashboard();
+    return false;
+  }
+
+  export async function handleAdminLogin(e) {
+    e.preventDefault();
+    const userEl = document.getElementById("loginUsername");
+    const passEl = document.getElementById("loginPassword");
+    const errBox = document.getElementById("loginErrorBox");
+    const errText = document.getElementById("loginErrorText");
+    const submitBtn = document.getElementById("btnSubmitLogin");
+
+    const email = (userEl?.value || "").trim();
+    const password = passEl?.value || "";
+
+    if (errBox) errBox.classList.add("hidden");
     if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.innerHTML = `
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = "<span>Memverifikasi Sesi Supabase...</span>";
+    }
+
+    try {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error || !data?.session?.user) {
+        if (errBox && errText) {
+          errText.textContent = translateAuthError(error);
+          errBox.classList.remove("hidden");
+        }
+        return;
+      }
+
+      unlockAdminDashboard(data.session.user.email);
+      showToast("Login berhasil! Sesi Admin Supabase aktif.");
+    } catch (err) {
+      if (errBox && errText) {
+        errText.textContent = translateAuthError(err);
+        errBox.classList.remove("hidden");
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `
         <span>Masuk ke Studio Admin</span>
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
         </svg>
       `;
+      }
     }
   }
-}
 
-export async function handleAdminLogout() {
-  try {
-    await supabaseClient.auth.signOut();
-  } catch (e) {
-    console.warn("Error saat signOut:", e);
-  }
-  lockAdminDashboard();
-  showToast("Anda telah keluar dari sesi Admin.");
-}
-
-export function toggleLoginPasswordVisibility() {
-  const passEl = document.getElementById("loginPassword");
-  const eyeOff = document.getElementById("iconLoginEyeOff");
-  const eyeOpen = document.getElementById("iconLoginEyeOpen");
-  if (!passEl) return;
-  if (passEl.type === "password") {
-    passEl.type = "text";
-    if (eyeOff) eyeOff.classList.add("hidden");
-    if (eyeOpen) eyeOpen.classList.remove("hidden");
-  } else {
-    passEl.type = "password";
-    if (eyeOff) eyeOff.classList.remove("hidden");
-    if (eyeOpen) eyeOpen.classList.add("hidden");
-  }
-}
-
-export function toggleSettingPasswordVisibility() {
-  const passEl = document.getElementById("settingAdminPassword");
-  const eyeOff = document.getElementById("iconSettingEyeOff");
-  const eyeOpen = document.getElementById("iconSettingEyeOpen");
-  if (!passEl) return;
-  if (passEl.type === "password") {
-    passEl.type = "text";
-    if (eyeOff) eyeOff.classList.add("hidden");
-    if (eyeOpen) eyeOpen.classList.remove("hidden");
-  } else {
-    passEl.type = "password";
-    if (eyeOff) eyeOff.classList.remove("hidden");
-    if (eyeOpen) eyeOpen.classList.add("hidden");
-  }
-}
-
-export async function saveAdminAccountSettings(e) {
-  e.preventDefault();
-  const newEmail = document.getElementById("settingAdminUsername").value.trim();
-  const newPassword = document.getElementById("settingAdminPassword").value;
-  if (!newEmail && !newPassword) return;
-
-  const updatePayload = {};
-  if (newEmail) updatePayload.email = newEmail;
-  if (newPassword) updatePayload.password = newPassword;
-
-  const { data, error } = await supabaseClient.auth.updateUser(updatePayload);
-  if (error) {
-    showToast("Gagal memperbarui akun di Supabase Auth: " + error.message, true);
-    return;
+  export async function handleAdminLogout() {
+    try {
+      await supabaseClient.auth.signOut();
+    } catch (e) {
+      console.warn("Error saat signOut:", e);
+    }
+    lockAdminDashboard();
+    showToast("Anda telah keluar dari sesi Admin.");
   }
 
-  const updatedEmail = data?.user?.email || newEmail;
-  const sidebarUser = document.getElementById("sidebarAdminUser");
-  if (sidebarUser && updatedEmail) sidebarUser.textContent = updatedEmail;
-  document.getElementById("settingAdminPassword").value = "";
-  showToast("Password / Akun Admin di Supabase Auth berhasil diperbarui!");
-}
+  export function toggleLoginPasswordVisibility() {
+    const passEl = document.getElementById("loginPassword");
+    const eyeOff = document.getElementById("iconLoginEyeOff");
+    const eyeOpen = document.getElementById("iconLoginEyeOpen");
+    if (!passEl) return;
+    if (passEl.type === "password") {
+      passEl.type = "text";
+      if (eyeOff) eyeOff.classList.add("hidden");
+      if (eyeOpen) eyeOpen.classList.remove("hidden");
+    } else {
+      passEl.type = "password";
+      if (eyeOff) eyeOff.classList.remove("hidden");
+      if (eyeOpen) eyeOpen.classList.add("hidden");
+    }
+  }
 
-// --- Modal Helpers ---
-export function openModal(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.remove("hidden");
-  el.classList.add("flex");
-}
+  export function toggleSettingPasswordVisibility() {
+    const passEl = document.getElementById("settingAdminPassword");
+    const eyeOff = document.getElementById("iconSettingEyeOff");
+    const eyeOpen = document.getElementById("iconSettingEyeOpen");
+    if (!passEl) return;
+    if (passEl.type === "password") {
+      passEl.type = "text";
+      if (eyeOff) eyeOff.classList.add("hidden");
+      if (eyeOpen) eyeOpen.classList.remove("hidden");
+    } else {
+      passEl.type = "password";
+      if (eyeOff) eyeOff.classList.remove("hidden");
+      if (eyeOpen) eyeOpen.classList.add("hidden");
+    }
+  }
 
-export function closeModal(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.classList.add("hidden");
-  el.classList.remove("flex");
-}
+  export async function saveAdminAccountSettings(e) {
+    e.preventDefault();
+    const newEmail = document.getElementById("settingAdminUsername").value.trim();
+    const newPassword = document.getElementById("settingAdminPassword").value;
+    if (!newEmail && !newPassword) return;
 
-// --- Initialization & Global Bindings ---
-document.addEventListener("DOMContentLoaded", () => {
-  checkAdminAuth();
-});
+    const updatePayload = {};
+    if (newEmail) updatePayload.email = newEmail;
+    if (newPassword) updatePayload.password = newPassword;
 
-Object.assign(window, {
-  checkAdminAuth,
-  handleAdminLogin,
-  handleAdminLogout,
-  toggleLoginPasswordVisibility,
-  toggleSettingPasswordVisibility,
-  saveAdminAccountSettings,
-  switchTab,
-  saveOnAirQuickForm,
-  saveStreamSettings,
-  updateAdminStreamTypeBadge,
-  applyPresetStream,
-  resetToDefaultData,
-  setRequestFilter,
-  toggleRequestRead,
-  deleteRequest,
-  openAddShoutoutModal,
-  submitAdminShoutout,
-  seedDefaultSchedulesToSupabase,
-  setScheduleOnAir,
-  openScheduleModal,
-  submitScheduleForm,
-  deleteSchedule,
-  toggleAnnouncerOnline,
-  handleAnnouncerAvatarUpload,
-  openAnnouncerModal,
-  submitAnnouncerForm,
-  deleteAnnouncer,
-  openModal,
-  closeModal
-});
+    const { data, error } = await supabaseClient.auth.updateUser(updatePayload);
+    if (error) {
+      showToast("Gagal memperbarui akun di Supabase Auth: " + error.message, true);
+      return;
+    }
+
+    const updatedEmail = data?.user?.email || newEmail;
+    const sidebarUser = document.getElementById("sidebarAdminUser");
+    if (sidebarUser && updatedEmail) sidebarUser.textContent = updatedEmail;
+    document.getElementById("settingAdminPassword").value = "";
+    showToast("Password / Akun Admin di Supabase Auth berhasil diperbarui!");
+  }
+
+  // --- Modal Helpers ---
+  export function openModal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove("hidden");
+    el.classList.add("flex");
+  }
+
+  export function closeModal(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add("hidden");
+    el.classList.remove("flex");
+  }
+
+  // --- Initialization & Global Bindings ---
+  document.addEventListener("DOMContentLoaded", () => {
+    checkAdminAuth();
+  });
+
+  Object.assign(window, {
+    checkAdminAuth,
+    handleAdminLogin,
+    handleAdminLogout,
+    toggleLoginPasswordVisibility,
+    toggleSettingPasswordVisibility,
+    saveAdminAccountSettings,
+    switchTab,
+    saveOnAirQuickForm,
+    saveStreamSettings,
+    updateAdminStreamTypeBadge,
+    applyPresetStream,
+    resetToDefaultData,
+    setRequestFilter,
+    toggleRequestRead,
+    deleteRequest,
+    openAddShoutoutModal,
+    submitAdminShoutout,
+    seedDefaultSchedulesToSupabase,
+    setScheduleOnAir,
+    openScheduleModal,
+    submitScheduleForm,
+    deleteSchedule,
+    toggleAnnouncerOnline,
+    handleAnnouncerAvatarUpload,
+    openAnnouncerModal,
+    submitAnnouncerForm,
+    deleteAnnouncer,
+    setBroadcastSourceMode,
+    syncBroadcastSourceToPublic,
+    fetchPlaylistFromSupabase,
+    handleAutoDjFileSelected,
+    handleUploadPlaylistTrack,
+    openEditPlaylistModal,
+    submitEditPlaylistForm,
+    deletePlaylistTrack,
+    playAutoDjTrackByIndex,
+    toggleAutoDjPlay,
+    nextAutoDjTrack,
+    prevAutoDjTrack,
+    toggleAutoDjLoop,
+    toggleAutoDjShuffle,
+    changeAutoDjVolume,
+    seekAutoDjAudio,
+    openModal,
+    closeModal
+  });
 

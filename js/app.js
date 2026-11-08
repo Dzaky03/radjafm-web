@@ -7,6 +7,7 @@ import {
   STORAGE_KEY,
   SCHEDULE_META_STORAGE_KEY,
   liveBroadcast,
+  studioSyncChannel,
   escapeHtml,
   formatRelativeTime,
   getSavedScheduleMeta
@@ -14,7 +15,9 @@ import {
 
 import {
   initPlayer,
-  configurePlayerStream
+  configurePlayerStream,
+  syncPlaybackState,
+  playerState
 } from "./player.js";
 
 const appState = {
@@ -573,6 +576,25 @@ function applyStudioConfig(data) {
       const qBadge = document.getElementById("streamQualityBadge");
       if (qBadge) qBadge.textContent = data.onAir.quality;
     }
+
+    const playerTitle = document.getElementById("playerTrackTitle");
+    const playerHosts = document.getElementById("playerAnnouncerInfo");
+    const heroTitle = document.getElementById("heroProgramTitle");
+    const heroHosts = document.getElementById("heroProgramHosts");
+
+    if (data.onAir.sourceMode === "autodj") {
+      const track = data.onAir.autodjTrack;
+      const title = track?.title || "AutoDJ Playlist";
+      const artist = track?.artist || "RADJAfm AutoDJ";
+      if (playerTitle) playerTitle.textContent = `${title} - RADJAfm`;
+      if (playerHosts) playerHosts.textContent = `🎵 AutoDJ • ${artist}`;
+      if (heroTitle) {
+        heroTitle.innerHTML = `${escapeHtml(title)} <span class="text-brand-500 italic">• AutoDJ</span>`;
+      }
+      if (heroHosts) heroHosts.textContent = artist;
+    } else if (data.onAir.sourceMode === "stream") {
+      loadSchedulesFromSupabase();
+    }
   }
 
   if (Array.isArray(data.announcers) && data.announcers.length > 0) {
@@ -626,10 +648,18 @@ export async function loadStudioSettingsAndAnnouncersFromSupabase() {
     const configUpdate = {};
     if (!settingsRes.error && Array.isArray(settingsRes.data) && settingsRes.data[0]) {
       const row = settingsRes.data[0];
+      const isAutoDj =
+        row.quality === "AutoDJ HD" ||
+        row.quality === "AutoDJ Paused" ||
+        (row.stream_url && row.stream_url.includes("/radio_audio/"));
+
+      playerState.studioAutoDjOnAir = isAutoDj && row.quality === "AutoDJ HD";
+
       configUpdate.onAir = {
         streamUrl: row.stream_url || row.streamUrl,
-        quality: row.quality || "HD 128kbps",
-        frequency: row.frequency || "101.8 FM"
+        quality: row.quality || (isAutoDj ? (playerState.studioAutoDjOnAir ? "AutoDJ HD" : "AutoDJ Paused") : "HD 128kbps"),
+        frequency: row.frequency || "101.8 FM",
+        sourceMode: isAutoDj ? "autodj" : "stream"
       };
     }
 
@@ -652,6 +682,45 @@ export async function loadStudioSettingsAndAnnouncersFromSupabase() {
     }
   } catch (e) {
     // Fallback otomatis ke localStorage jika tabel opsional belum dibuat di Supabase
+  }
+}
+
+export function handleAutoDjPlaybackSync(payload) {
+  if (!payload || typeof payload !== "object") return;
+  const { sourceMode, streamUrl, title, artist, isPlaying, currentTime } = payload;
+
+  if (sourceMode === "autodj") {
+    playerState.studioAutoDjOnAir = Boolean(isPlaying);
+
+    const playerTitle = document.getElementById("playerTrackTitle");
+    const playerHosts = document.getElementById("playerAnnouncerInfo");
+    const heroTitle = document.getElementById("heroProgramTitle");
+    const heroHosts = document.getElementById("heroProgramHosts");
+
+    if (playerTitle) playerTitle.textContent = `${title || "AutoDJ"} - RADJAfm`;
+    if (playerHosts) {
+      playerHosts.textContent = isPlaying
+        ? `🎵 AutoDJ • ${artist || "RADJAfm"}`
+        : `⏸️ AutoDJ Paused • ${artist || "RADJAfm"}`;
+    }
+    if (heroTitle) {
+      heroTitle.innerHTML = `${escapeHtml(title || "AutoDJ")} <span class="text-brand-500 italic">${
+        isPlaying ? "• AutoDJ ON AIR" : "• AutoDJ PAUSED"
+      }</span>`;
+    }
+    if (heroHosts) heroHosts.textContent = artist || "RADJAfm AutoDJ";
+
+    if (streamUrl && playerState.activeStreamUrl !== streamUrl) {
+      configurePlayerStream(streamUrl);
+    }
+
+    syncPlaybackState(isPlaying, currentTime);
+  } else if (sourceMode === "stream") {
+    playerState.studioAutoDjOnAir = false;
+    if (streamUrl) {
+      configurePlayerStream(streamUrl);
+    }
+    loadSchedulesFromSupabase();
   }
 }
 
@@ -680,6 +749,8 @@ function loadStudioConfigAndAnnouncers() {
     liveBroadcast.addEventListener("message", (e) => {
       if (e.data && e.data.type === "STUDIO_CONFIG_UPDATED" && e.data.payload) {
         applyStudioConfig(e.data.payload);
+      } else if (e.data && e.data.type === "AUTODJ_PLAYBACK_SYNC" && e.data.payload) {
+        handleAutoDjPlaybackSync(e.data.payload);
       } else if (e.data && e.data.type === "SCHEDULE_META_UPDATED") {
         loadSchedulesFromSupabase();
       }
@@ -733,8 +804,7 @@ function setupRealtimeSubscriptions() {
     )
     .subscribe();
 
-  supabaseClient
-    .channel("radjafm-studio-sync")
+  studioSyncChannel
     .on("broadcast", { event: "studio-config-updated" }, (payload) => {
       if (payload && payload.payload) {
         try {
@@ -743,7 +813,11 @@ function setupRealtimeSubscriptions() {
         applyStudioConfig(payload.payload);
       }
     })
-    .subscribe();
+    .on("broadcast", { event: "autodj-playback-sync" }, (payload) => {
+      if (payload && payload.payload) {
+        handleAutoDjPlaybackSync(payload.payload);
+      }
+    });
 }
 
 // --- Initialization & Global Bindings ---
@@ -772,4 +846,5 @@ window.addEventListener("hashchange", () => {
 window.navigate = navigate;
 window.toggleMobileMenu = toggleMobileMenu;
 window.handleRequestSubmit = handleRequestSubmit;
+window.loadStudioSettingsAndAnnouncersFromSupabase = loadStudioSettingsAndAnnouncersFromSupabase;
 
