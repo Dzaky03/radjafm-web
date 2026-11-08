@@ -242,30 +242,18 @@ async function insertRequestToSupabase(name, location, song, message) {
   const valueByGroup = { nama: name, lokasi: location, lagu: song, pesan: message };
 
   for (let attempt = 0; attempt < 10; attempt++) {
-    const { data, error } = await supabaseClient.from("requests").insert([payload]).select();
+    // Gunakan .insert([payload]) tanpa .select() agar tetap lolos jika role 'anon'
+    // pada RLS Supabase hanya diizinkan melakukan INSERT (tanpa SELECT/RETURNING).
+    const { error } = await supabaseClient.from("requests").insert([payload]);
     if (!error) {
-      if (data && data[0]) {
-        knownRequestColumns = Object.keys(data[0]);
-        const patch = {};
-        const ensureCol = (candidates, val) => {
-          if (!val) return;
-          const col = candidates.find((c) => knownRequestColumns.includes(c));
-          if (col && !data[0][col]) patch[col] = val;
-        };
-        ensureCol(["lokasi", "location", "kota", "daerah"], location);
-        ensureCol(["lagu", "judul_lagu", "artis_lagu", "song", "song_title", "request_lagu"], song);
-        ensureCol(["pesan", "salam", "message", "ucapan", "isi_pesan"], message);
-        if (Object.keys(patch).length > 0 && data[0].id !== undefined) {
-          const { data: updated } = await supabaseClient
-            .from("requests")
-            .update(patch)
-            .eq("id", data[0].id)
-            .select();
-          if (updated && updated[0]) return updated[0];
-        }
-        return data[0];
-      }
-      return null;
+      return {
+        id: "local-" + Date.now(),
+        nama: name,
+        lokasi: location,
+        lagu: song,
+        pesan: message,
+        created_at: new Date().toISOString()
+      };
     }
 
     const unknownMatch =
@@ -628,6 +616,45 @@ function applyStudioConfig(data) {
   }
 }
 
+export async function loadStudioSettingsAndAnnouncersFromSupabase() {
+  try {
+    const [settingsRes, announcersRes] = await Promise.all([
+      supabaseClient.from("studio_settings").select("*").limit(1),
+      supabaseClient.from("announcers").select("*").order("id", { ascending: true })
+    ]);
+
+    const configUpdate = {};
+    if (!settingsRes.error && Array.isArray(settingsRes.data) && settingsRes.data[0]) {
+      const row = settingsRes.data[0];
+      configUpdate.onAir = {
+        streamUrl: row.stream_url || row.streamUrl,
+        quality: row.quality || "HD 128kbps",
+        frequency: row.frequency || "101.8 FM"
+      };
+    }
+
+    if (!announcersRes.error && Array.isArray(announcersRes.data) && announcersRes.data.length > 0) {
+      configUpdate.announcers = announcersRes.data.map((a) => ({
+        id: String(a.id),
+        name: a.name ?? a.nama ?? "Penyiar RADJAfm",
+        show: a.show ?? a.program ?? "Program RADJAfm",
+        time: a.time ?? a.jam_siaran ?? "09:00 - 12:00 WIB",
+        bio: a.bio ?? a.deskripsi ?? "",
+        tag: a.tag ?? a.role ?? "Host RADJAfm",
+        social: a.social ?? a.sosmed ?? "@radjafm",
+        online: Boolean(a.online ?? a.is_online),
+        avatar: a.avatar ?? a.foto ?? "https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg"
+      }));
+    }
+
+    if (configUpdate.onAir || configUpdate.announcers) {
+      applyStudioConfig(configUpdate);
+    }
+  } catch (e) {
+    // Fallback otomatis ke localStorage jika tabel opsional belum dibuat di Supabase
+  }
+}
+
 function loadStudioConfigAndAnnouncers() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -637,6 +664,7 @@ function loadStudioConfigAndAnnouncers() {
   } catch (err) {
     console.warn("Gagal memuat konfigurasi studio lokal:", err);
   }
+  loadStudioSettingsAndAnnouncersFromSupabase();
 
   window.addEventListener("storage", (e) => {
     if (e.key === STORAGE_KEY && e.newValue) {
@@ -683,6 +711,24 @@ function setupRealtimeSubscriptions() {
       { event: "*", schema: "public", table: "schedules" },
       () => {
         loadSchedulesFromSupabase();
+      }
+    )
+    .subscribe();
+
+  supabaseClient
+    .channel("public:studio-config:live")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "studio_settings" },
+      () => {
+        loadStudioSettingsAndAnnouncersFromSupabase();
+      }
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "announcers" },
+      () => {
+        loadStudioSettingsAndAnnouncersFromSupabase();
       }
     )
     .subscribe();

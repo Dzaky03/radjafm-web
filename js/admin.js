@@ -17,6 +17,8 @@ import {
 let knownRequestColumns = null;
 let knownScheduleColumns = null;
 let studioSyncChannel = null;
+let realtimeInitialized = false;
+let authListenerInitialized = false;
 
 export const DEFAULT_DATA = {
   onAir: {
@@ -216,7 +218,7 @@ function savePersistedData() {
   if (liveBroadcast) {
     try {
       liveBroadcast.postMessage({ type: "STUDIO_CONFIG_UPDATED", payload });
-    } catch (err) {}
+    } catch (err) { }
   }
   if (studioSyncChannel) {
     try {
@@ -225,7 +227,7 @@ function savePersistedData() {
         event: "studio-config-updated",
         payload
       });
-    } catch (err) {}
+    } catch (err) { }
   }
 }
 
@@ -236,14 +238,14 @@ function loadReadStatusMap() {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") return parsed;
     }
-  } catch (e) {}
+  } catch (e) { }
   return {};
 }
 
 function saveReadStatusMap() {
   try {
     localStorage.setItem(READ_STATUS_STORAGE_KEY, JSON.stringify(localReadStatusMap));
-  } catch (e) {}
+  } catch (e) { }
 }
 
 function loadScheduleMetaMap() {
@@ -253,7 +255,7 @@ function loadScheduleMetaMap() {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") return parsed;
     }
-  } catch (e) {}
+  } catch (e) { }
   return {};
 }
 
@@ -263,14 +265,14 @@ function saveScheduleMetaMap() {
       SCHEDULE_META_STORAGE_KEY,
       JSON.stringify(localScheduleMetaMap)
     );
-  } catch (e) {}
+  } catch (e) { }
   if (liveBroadcast) {
     try {
       liveBroadcast.postMessage({
         type: "SCHEDULE_META_UPDATED",
         payload: localScheduleMetaMap
       });
-    } catch (e) {}
+    } catch (e) { }
   }
 }
 
@@ -765,6 +767,46 @@ export async function fetchSchedulesFromSupabase() {
   }
 }
 
+export async function fetchStudioSettingsAndAnnouncersFromSupabase() {
+  try {
+    const [settingsRes, announcersRes] = await Promise.all([
+      supabaseClient.from("studio_settings").select("*").limit(1),
+      supabaseClient.from("announcers").select("*").order("id", { ascending: true })
+    ]);
+
+    let updated = false;
+    if (!settingsRes.error && Array.isArray(settingsRes.data) && settingsRes.data[0]) {
+      const row = settingsRes.data[0];
+      if (row.stream_url) cmsData.onAir.streamUrl = row.stream_url;
+      if (row.quality) cmsData.onAir.quality = row.quality;
+      if (row.frequency) cmsData.onAir.frequency = row.frequency;
+      updated = true;
+    }
+
+    if (!announcersRes.error && Array.isArray(announcersRes.data) && announcersRes.data.length > 0) {
+      cmsData.announcers = announcersRes.data.map((a) => ({
+        id: String(a.id),
+        name: a.name ?? a.nama ?? "Penyiar RADJAfm",
+        show: a.show ?? a.program ?? "Program RADJAfm",
+        time: a.time ?? a.jam_siaran ?? "09:00 - 12:00 WIB",
+        bio: a.bio ?? a.deskripsi ?? "",
+        tag: a.tag ?? a.role ?? "Host RADJAfm",
+        social: a.social ?? a.sosmed ?? "@radjafm",
+        online: Boolean(a.online ?? a.is_online),
+        avatar: a.avatar ?? a.foto ?? DEFAULT_ANNOUNCER_AVATAR
+      }));
+      updated = true;
+    }
+
+    if (updated) {
+      savePersistedData();
+      renderAll();
+    }
+  } catch (e) {
+    // Gunakan data lokal jika tabel studio_settings / announcers belum dibuat
+  }
+}
+
 // --- Realtime Subscriptions (requests & schedules) ---
 function initSupabaseRealtime() {
   supabaseClient
@@ -983,9 +1025,8 @@ function renderDashboardRequests() {
     .slice(0, 5)
     .map(
       (req) => `
-      <div class="p-4 rounded-2xl border ${
-        req.read ? "bg-gray-50 border-gray-100 opacity-75" : "bg-orange-50/40 border-orange-200"
-      } flex items-start justify-between gap-4">
+      <div class="p-4 rounded-2xl border ${req.read ? "bg-gray-50 border-gray-100 opacity-75" : "bg-orange-50/40 border-orange-200"
+        } flex items-start justify-between gap-4">
         <div class="space-y-1">
           <div class="flex items-center gap-2">
             <span class="font-bold text-sm text-gray-900">${escapeHtml(req.name)}</span>
@@ -996,11 +1037,10 @@ function renderDashboardRequests() {
           <p class="text-xs text-gray-700">"${escapeHtml(req.message)}"</p>
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
-          <button onclick="toggleRequestRead('${req.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold ${
-            req.read
-              ? "bg-gray-200 text-gray-600"
-              : "bg-emerald-500 text-white hover:bg-emerald-600"
-          } transition">
+          <button onclick="toggleRequestRead('${req.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold ${req.read
+          ? "bg-gray-200 text-gray-600"
+          : "bg-emerald-500 text-white hover:bg-emerald-600"
+        } transition">
             ${req.read ? "Dibaca" : "Tandai Dibaca"}
           </button>
           <button onclick="deleteRequest('${req.id}')" class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition" title="Hapus">
@@ -1028,33 +1068,29 @@ function renderRequestsTab() {
   container.innerHTML = list
     .map(
       (req) => `
-      <div class="bg-white rounded-2xl p-5 border ${
-        req.read ? "border-gray-100" : "border-orange-200 ring-1 ring-orange-100"
-      } shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="bg-white rounded-2xl p-5 border ${req.read ? "border-gray-100" : "border-orange-200 ring-1 ring-orange-100"
+        } shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div class="space-y-1.5">
           <div class="flex flex-wrap items-center gap-2">
-            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-              req.read ? "bg-gray-100 text-gray-500" : "bg-brand-500 text-white"
-            }">
+            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${req.read ? "bg-gray-100 text-gray-500" : "bg-brand-500 text-white"
+        }">
               ${req.read ? "Sudah Dibaca" : "Baru"}
             </span>
             <span class="font-bold text-base text-gray-900">${escapeHtml(req.name)}</span>
             <span class="text-xs text-gray-500">• ${escapeHtml(req.location || "Indonesia")}</span>
             <span class="text-xs font-mono text-gray-400">(${escapeHtml(req.time)})</span>
           </div>
-          ${
-            req.song
-              ? `<div class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 bg-orange-50 border border-orange-200/60 px-2.5 py-0.5 rounded-full">🎵 ${escapeHtml(req.song)}</div>`
-              : ""
-          }
+          ${req.song
+          ? `<div class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 bg-orange-50 border border-orange-200/60 px-2.5 py-0.5 rounded-full">🎵 ${escapeHtml(req.song)}</div>`
+          : ""
+        }
           <p class="text-sm text-gray-700 leading-relaxed">"${escapeHtml(req.message)}"</p>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <button onclick="toggleRequestRead('${req.id}')" class="px-3.5 py-2 rounded-xl text-xs font-bold ${
-            req.read
-              ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              : "bg-emerald-500 text-white hover:bg-emerald-600"
-          } transition">
+          <button onclick="toggleRequestRead('${req.id}')" class="px-3.5 py-2 rounded-xl text-xs font-bold ${req.read
+          ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          : "bg-emerald-500 text-white hover:bg-emerald-600"
+        } transition">
             ${req.read ? "Batal Tandai" : "✓ Tandai Dibaca"}
           </button>
           <button onclick="deleteRequest('${req.id}')" class="px-3 py-2 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition">
@@ -1074,25 +1110,22 @@ function renderScheduleTab() {
     .map((sch) => {
       const isOnAir = Boolean(sch.isOnAir) || sch.status === "ON AIR";
       return `
-        <div class="rounded-2xl p-5 border ${
-          isOnAir
-            ? "bg-orange-50/70 border-brand-500 ring-2 ring-orange-200"
-            : "bg-white border-gray-200/80"
+        <div class="rounded-2xl p-5 border ${isOnAir
+          ? "bg-orange-50/70 border-brand-500 ring-2 ring-orange-200"
+          : "bg-white border-gray-200/80"
         } shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
             <div class="flex items-center gap-2 sm:w-48 shrink-0">
-              <span class="font-mono font-bold text-xs sm:text-sm ${
-                isOnAir
-                  ? "text-brand-700 bg-white px-2.5 py-1 rounded-md border border-brand-200"
-                  : "text-gray-600"
-              }">${escapeHtml(sch.time)}</span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                isOnAir
-                  ? "bg-brand-500 text-white"
-                  : sch.status === "SELESAI"
-                  ? "bg-gray-100 text-gray-500"
-                  : "bg-blue-50 text-blue-600"
-              }">
+              <span class="font-mono font-bold text-xs sm:text-sm ${isOnAir
+          ? "text-brand-700 bg-white px-2.5 py-1 rounded-md border border-brand-200"
+          : "text-gray-600"
+        }">${escapeHtml(sch.time)}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${isOnAir
+          ? "bg-brand-500 text-white"
+          : sch.status === "SELESAI"
+            ? "bg-gray-100 text-gray-500"
+            : "bg-blue-50 text-blue-600"
+        }">
                 ${isOnAir ? "ON AIR" : escapeHtml(sch.status || "JADWAL")}
               </span>
             </div>
@@ -1103,19 +1136,18 @@ function renderScheduleTab() {
             </div>
           </div>
           <div class="flex flex-wrap items-center gap-2 shrink-0">
-            ${
-              !isOnAir
-                ? `
+            ${!isOnAir
+          ? `
               <button onclick="setScheduleOnAir('${sch.id}')" class="px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-500 text-brand-600 hover:text-white border border-brand-200 text-xs font-bold transition">
                 Set ON AIR
               </button>
             `
-                : `
+          : `
               <span class="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
                 ● Mengudara
               </span>
             `
-            }
+        }
             <button onclick="openScheduleModal('${sch.id}')" class="px-3 py-1.5 rounded-xl border border-gray-200 hover:border-gray-300 text-gray-700 text-xs font-bold bg-white">
               Edit
             </button>
@@ -1138,20 +1170,18 @@ function renderAnnouncersTab() {
       <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col items-center text-center">
         <div class="relative w-20 h-20 mb-3">
           <img src="${escapeHtml(ann.avatar || "https://www.gstatic.com/labs-code/stitch/stitch-placeholder-300x300.svg")}" alt="${escapeHtml(ann.name)}" class="w-full h-full object-cover rounded-full ring-2 ring-orange-200 p-0.5" />
-          <span class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white ${
-            ann.online ? "bg-emerald-500" : "bg-gray-300"
-          }"></span>
+          <span class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white ${ann.online ? "bg-emerald-500" : "bg-gray-300"
+        }"></span>
         </div>
         <h3 class="font-serif text-lg font-bold text-gray-900">${escapeHtml(ann.name)}</h3>
         <span class="text-xs font-semibold text-brand-600 bg-orange-50 px-2.5 py-0.5 rounded-full border border-orange-200/60 mt-1">${escapeHtml(ann.show)}</span>
         <span class="text-[11px] font-mono text-gray-400 mt-1">${escapeHtml(ann.time)}</span>
         <p class="text-xs text-gray-600 mt-2 line-clamp-2">${escapeHtml(ann.bio)}</p>
         <div class="mt-4 pt-3 w-full border-t border-gray-100 flex items-center justify-between gap-2">
-          <button onclick="toggleAnnouncerOnline('${ann.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold ${
-            ann.online
-              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-              : "bg-gray-100 text-gray-600"
-          }">
+          <button onclick="toggleAnnouncerOnline('${ann.id}')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold ${ann.online
+          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+          : "bg-gray-100 text-gray-600"
+        }">
             ${ann.online ? "● On Air" : "○ Offline"}
           </button>
           <div class="flex items-center gap-1.5">
@@ -1215,7 +1245,7 @@ export async function saveOnAirQuickForm(e) {
   }
 }
 
-export function saveStreamSettings(e) {
+export async function saveStreamSettings(e) {
   e.preventDefault();
   const rawUrl = document.getElementById("settingStreamUrl").value.trim();
   cmsData.onAir.streamUrl = extractCleanUrl(rawUrl);
@@ -1223,6 +1253,19 @@ export function saveStreamSettings(e) {
   cmsData.onAir.frequency = document.getElementById("settingFrequency").value.trim();
   savePersistedData();
   renderAll();
+
+  try {
+    await supabaseClient.from("studio_settings").upsert([
+      {
+        id: 1,
+        stream_url: cmsData.onAir.streamUrl,
+        quality: cmsData.onAir.quality,
+        frequency: cmsData.onAir.frequency,
+        updated_at: new Date().toISOString()
+      }
+    ]);
+  } catch (err) {}
+
   showToast("Pengaturan stream disimpan & disinkronkan ke Web Publik!");
 }
 
@@ -1476,18 +1519,83 @@ export async function deleteSchedule(id) {
 }
 
 // --- Actions: Announcers ---
-export function toggleAnnouncerOnline(id) {
-  const ann = cmsData.announcers.find((a) => a.id === id);
+export async function toggleAnnouncerOnline(id) {
+  const ann = cmsData.announcers.find((a) => String(a.id) === String(id));
   if (ann) {
     ann.online = !ann.online;
     savePersistedData();
     renderAll();
+    try {
+      await supabaseClient
+        .from("announcers")
+        .update({ online: ann.online })
+        .eq("id", ann.id);
+    } catch (err) {}
     showToast("Status penyiar diperbarui & disimpan!");
   }
 }
 
+const DEFAULT_ANNOUNCER_AVATAR =
+  "https://lh3.googleusercontent.com/aida-public/AB6AXuA-TvNM2ZZPV_JMS5zwOAZe1YItf-Spcs4hdDFpYQKpFgtJys8pMS13JBrbRsq8VjBxcEg_FfcA9YFi6fRALesM5fWrLvIto2Hjs9IkmaK8DweWDwAzltWaboplviRD01jqFDWbNrUlPLnY1Y8rnAi95i77-FA6uZZURSLY6fJXs7kglOGdZNErNTreLAlKboC2zUG1k2d4LFEbt2YH0gh4uy77dWPPP7I86zQcllAl";
+
+export function handleAnnouncerAvatarUpload(e) {
+  const file = e.target?.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    showToast("Pilih file gambar yang valid (.jpg, .png, .webp)", true);
+    return;
+  }
+
+  const infoEl = document.getElementById("annAvatarFileInfo");
+  if (infoEl) infoEl.textContent = "Memproses foto: " + file.name + "...";
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const rawDataUrl = ev.target?.result;
+    if (!rawDataUrl) return;
+
+    const img = new Image();
+    img.onload = () => {
+      // Resize & center-crop ke 360x360 agar ringan disimpan di localStorage
+      const size = 360;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+
+      const minDim = Math.min(img.width, img.height);
+      const sx = (img.width - minDim) / 2;
+      const sy = (img.height - minDim) / 2;
+
+      ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+      const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.84);
+
+      const hiddenInp = document.getElementById("annAvatar");
+      const previewImg = document.getElementById("annAvatarPreview");
+      if (hiddenInp) hiddenInp.value = compressedDataUrl;
+      if (previewImg) previewImg.src = compressedDataUrl;
+      if (infoEl) infoEl.textContent = "✓ Foto siap disimpan (" + file.name + ")";
+    };
+    img.onerror = () => {
+      const hiddenInp = document.getElementById("annAvatar");
+      const previewImg = document.getElementById("annAvatarPreview");
+      if (hiddenInp) hiddenInp.value = String(rawDataUrl);
+      if (previewImg) previewImg.src = String(rawDataUrl);
+      if (infoEl) infoEl.textContent = "✓ Foto dipilih (" + file.name + ")";
+    };
+    img.src = String(rawDataUrl);
+  };
+  reader.readAsDataURL(file);
+}
+
 export function openAnnouncerModal(editId) {
   const modalTitle = document.getElementById("modalAnnouncerTitle");
+  const fileInp = document.getElementById("annAvatarFile");
+  const previewImg = document.getElementById("annAvatarPreview");
+  const infoEl = document.getElementById("annAvatarFileInfo");
+  if (fileInp) fileInp.value = "";
+
   if (editId) {
     const a = cmsData.announcers.find((x) => x.id === editId);
     if (!a) return;
@@ -1498,7 +1606,9 @@ export function openAnnouncerModal(editId) {
     document.getElementById("annTime").value = a.time;
     document.getElementById("annTag").value = a.tag;
     document.getElementById("annSocial").value = a.social;
-    document.getElementById("annAvatar").value = a.avatar;
+    document.getElementById("annAvatar").value = a.avatar || DEFAULT_ANNOUNCER_AVATAR;
+    if (previewImg) previewImg.src = a.avatar || DEFAULT_ANNOUNCER_AVATAR;
+    if (infoEl) infoEl.textContent = "Pilih file baru jika ingin mengganti foto profil";
     document.getElementById("annBio").value = a.bio;
     document.getElementById("annOnline").checked = !!a.online;
   } else {
@@ -1510,17 +1620,17 @@ export function openAnnouncerModal(editId) {
     document.getElementById("annTag").value = "Host RADJAfm";
     document.getElementById("annSocial").value = "@radjafm";
     document.getElementById("annAvatar").value = "";
+    if (previewImg) previewImg.src = DEFAULT_ANNOUNCER_AVATAR;
+    if (infoEl) infoEl.textContent = "Pilih foto (.jpg, .png, .webp) dari perangkat Anda";
     document.getElementById("annBio").value = "";
     document.getElementById("annOnline").checked = false;
   }
   openModal("modalAnnouncer");
 }
 
-export function submitAnnouncerForm(e) {
+export async function submitAnnouncerForm(e) {
   e.preventDefault();
   const editId = document.getElementById("annEditId").value;
-  const defaultAvatar =
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuA-TvNM2ZZPV_JMS5zwOAZe1YItf-Spcs4hdDFpYQKpFgtJys8pMS13JBrbRsq8VjBxcEg_FfcA9YFi6fRALesM5fWrLvIto2Hjs9IkmaK8DweWDwAzltWaboplviRD01jqFDWbNrUlPLnY1Y8rnAi95i77-FA6uZZURSLY6fJXs7kglOGdZNErNTreLAlKboC2zUG1k2d4LFEbt2YH0gh4uy77dWPPP7I86zQcllAl";
   const payload = {
     id: editId || "ann-" + Date.now(),
     name: document.getElementById("annName").value.trim(),
@@ -1528,13 +1638,13 @@ export function submitAnnouncerForm(e) {
     time: document.getElementById("annTime").value.trim(),
     tag: document.getElementById("annTag").value.trim(),
     social: document.getElementById("annSocial").value.trim(),
-    avatar: document.getElementById("annAvatar").value.trim() || defaultAvatar,
+    avatar: document.getElementById("annAvatar").value.trim() || DEFAULT_ANNOUNCER_AVATAR,
     bio: document.getElementById("annBio").value.trim(),
     online: document.getElementById("annOnline").checked
   };
 
   if (editId) {
-    const idx = cmsData.announcers.findIndex((x) => x.id === editId);
+    const idx = cmsData.announcers.findIndex((x) => String(x.id) === String(editId));
     if (idx !== -1) cmsData.announcers[idx] = payload;
   } else {
     cmsData.announcers.push(payload);
@@ -1542,14 +1652,247 @@ export function submitAnnouncerForm(e) {
   savePersistedData();
   closeModal("modalAnnouncer");
   renderAll();
+
+  try {
+    await supabaseClient.from("announcers").upsert([payload]);
+  } catch (err) {}
+
   showToast("Profil penyiar disimpan & disinkronkan ke Web Publik!");
 }
 
-export function deleteAnnouncer(id) {
-  cmsData.announcers = cmsData.announcers.filter((a) => a.id !== id);
+export async function deleteAnnouncer(id) {
+  cmsData.announcers = cmsData.announcers.filter((a) => String(a.id) !== String(id));
   savePersistedData();
   renderAll();
+  try {
+    await supabaseClient.from("announcers").delete().eq("id", id);
+  } catch (err) {}
   showToast("Penyiar dihapus & disimpan!");
+}
+
+// --- Supabase Auth & Session Management (Pure RLS-Ready Auth) ---
+function translateAuthError(error) {
+  const msg = String(error?.message || "").toLowerCase();
+  if (msg.includes("invalid login credentials")) {
+    return "Email atau password salah. Pastikan akun terdaftar di Supabase Authentication.";
+  }
+  if (msg.includes("email not confirmed")) {
+    return "Email belum dikonfirmasi. Periksa inbox email atau nonaktifkan Confirm Email di Supabase Auth.";
+  }
+  if (msg.includes("too many requests") || msg.includes("rate limit")) {
+    return "Terlalu banyak percobaan login. Silakan tunggu beberapa saat lalu coba lagi.";
+  }
+  if (msg.includes("network") || msg.includes("fetch")) {
+    return "Gagal terhubung ke server Supabase. Periksa koneksi internet Anda.";
+  }
+  return error?.message || "Gagal melakukan autentikasi ke Supabase.";
+}
+
+function lockAdminDashboard(reasonMessage = "") {
+  const passEl = document.getElementById("loginPassword");
+  if (passEl) {
+    passEl.value = "";
+    passEl.type = "password";
+  }
+  const eyeOff = document.getElementById("iconLoginEyeOff");
+  const eyeOpen = document.getElementById("iconLoginEyeOpen");
+  if (eyeOff) eyeOff.classList.remove("hidden");
+  if (eyeOpen) eyeOpen.classList.add("hidden");
+
+  const errBox = document.getElementById("loginErrorBox");
+  const errText = document.getElementById("loginErrorText");
+  if (errBox && errText) {
+    if (reasonMessage) {
+      errText.textContent = reasonMessage;
+      errBox.classList.remove("hidden");
+    } else {
+      errBox.classList.add("hidden");
+    }
+  }
+
+  const overlay = document.getElementById("adminLoginOverlay");
+  if (overlay) {
+    overlay.classList.remove("hidden");
+    overlay.classList.add("flex");
+  }
+}
+
+function unlockAdminDashboard(userEmail) {
+  const overlay = document.getElementById("adminLoginOverlay");
+  if (overlay) {
+    overlay.classList.add("hidden");
+    overlay.classList.remove("flex");
+  }
+  const sidebarUser = document.getElementById("sidebarAdminUser");
+  if (sidebarUser) {
+    sidebarUser.textContent = userEmail || "Admin Terautentikasi";
+  }
+
+  const userInp = document.getElementById("settingAdminUsername");
+  const passInp = document.getElementById("settingAdminPassword");
+  if (userInp) userInp.value = userEmail || "";
+  if (passInp) passInp.value = "";
+
+  renderAll();
+  fetchSchedulesFromSupabase();
+  fetchRequestsFromSupabase();
+  fetchStudioSettingsAndAnnouncersFromSupabase();
+  if (!realtimeInitialized) {
+    realtimeInitialized = true;
+    initSupabaseRealtime();
+  }
+}
+
+function initAuthStateListener() {
+  if (authListenerInitialized) return;
+  authListenerInitialized = true;
+
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+      if (session?.user) {
+        unlockAdminDashboard(session.user.email);
+      }
+    } else if (event === "SIGNED_OUT") {
+      lockAdminDashboard();
+    }
+  });
+}
+
+export async function checkAdminAuth() {
+  initAuthStateListener();
+  try {
+    // Hapus sisa data kredensial lokal lama jika masih ada di browser
+    localStorage.removeItem("radjafm_admin_credentials_v1");
+    localStorage.removeItem("radjafm_admin_session_v1");
+    sessionStorage.removeItem("radjafm_admin_session_v1");
+
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (!error && data?.session?.user) {
+      unlockAdminDashboard(data.session.user.email);
+      return true;
+    }
+  } catch (err) {
+    console.warn("Gagal memeriksa sesi Supabase Auth:", err);
+  }
+
+  lockAdminDashboard();
+  return false;
+}
+
+export async function handleAdminLogin(e) {
+  e.preventDefault();
+  const userEl = document.getElementById("loginUsername");
+  const passEl = document.getElementById("loginPassword");
+  const errBox = document.getElementById("loginErrorBox");
+  const errText = document.getElementById("loginErrorText");
+  const submitBtn = document.getElementById("btnSubmitLogin");
+
+  const email = (userEl?.value || "").trim();
+  const password = passEl?.value || "";
+
+  if (errBox) errBox.classList.add("hidden");
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = "<span>Memverifikasi Sesi Supabase...</span>";
+  }
+
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error || !data?.session?.user) {
+      if (errBox && errText) {
+        errText.textContent = translateAuthError(error);
+        errBox.classList.remove("hidden");
+      }
+      return;
+    }
+
+    unlockAdminDashboard(data.session.user.email);
+    showToast("Login berhasil! Sesi Admin Supabase aktif.");
+  } catch (err) {
+    if (errBox && errText) {
+      errText.textContent = translateAuthError(err);
+      errBox.classList.remove("hidden");
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `
+        <span>Masuk ke Studio Admin</span>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+        </svg>
+      `;
+    }
+  }
+}
+
+export async function handleAdminLogout() {
+  try {
+    await supabaseClient.auth.signOut();
+  } catch (e) {
+    console.warn("Error saat signOut:", e);
+  }
+  lockAdminDashboard();
+  showToast("Anda telah keluar dari sesi Admin.");
+}
+
+export function toggleLoginPasswordVisibility() {
+  const passEl = document.getElementById("loginPassword");
+  const eyeOff = document.getElementById("iconLoginEyeOff");
+  const eyeOpen = document.getElementById("iconLoginEyeOpen");
+  if (!passEl) return;
+  if (passEl.type === "password") {
+    passEl.type = "text";
+    if (eyeOff) eyeOff.classList.add("hidden");
+    if (eyeOpen) eyeOpen.classList.remove("hidden");
+  } else {
+    passEl.type = "password";
+    if (eyeOff) eyeOff.classList.remove("hidden");
+    if (eyeOpen) eyeOpen.classList.add("hidden");
+  }
+}
+
+export function toggleSettingPasswordVisibility() {
+  const passEl = document.getElementById("settingAdminPassword");
+  const eyeOff = document.getElementById("iconSettingEyeOff");
+  const eyeOpen = document.getElementById("iconSettingEyeOpen");
+  if (!passEl) return;
+  if (passEl.type === "password") {
+    passEl.type = "text";
+    if (eyeOff) eyeOff.classList.add("hidden");
+    if (eyeOpen) eyeOpen.classList.remove("hidden");
+  } else {
+    passEl.type = "password";
+    if (eyeOff) eyeOff.classList.remove("hidden");
+    if (eyeOpen) eyeOpen.classList.add("hidden");
+  }
+}
+
+export async function saveAdminAccountSettings(e) {
+  e.preventDefault();
+  const newEmail = document.getElementById("settingAdminUsername").value.trim();
+  const newPassword = document.getElementById("settingAdminPassword").value;
+  if (!newEmail && !newPassword) return;
+
+  const updatePayload = {};
+  if (newEmail) updatePayload.email = newEmail;
+  if (newPassword) updatePayload.password = newPassword;
+
+  const { data, error } = await supabaseClient.auth.updateUser(updatePayload);
+  if (error) {
+    showToast("Gagal memperbarui akun di Supabase Auth: " + error.message, true);
+    return;
+  }
+
+  const updatedEmail = data?.user?.email || newEmail;
+  const sidebarUser = document.getElementById("sidebarAdminUser");
+  if (sidebarUser && updatedEmail) sidebarUser.textContent = updatedEmail;
+  document.getElementById("settingAdminPassword").value = "";
+  showToast("Password / Akun Admin di Supabase Auth berhasil diperbarui!");
 }
 
 // --- Modal Helpers ---
@@ -1569,13 +1912,16 @@ export function closeModal(id) {
 
 // --- Initialization & Global Bindings ---
 document.addEventListener("DOMContentLoaded", () => {
-  renderAll();
-  fetchSchedulesFromSupabase();
-  fetchRequestsFromSupabase();
-  initSupabaseRealtime();
+  checkAdminAuth();
 });
 
 Object.assign(window, {
+  checkAdminAuth,
+  handleAdminLogin,
+  handleAdminLogout,
+  toggleLoginPasswordVisibility,
+  toggleSettingPasswordVisibility,
+  saveAdminAccountSettings,
   switchTab,
   saveOnAirQuickForm,
   saveStreamSettings,
@@ -1593,6 +1939,7 @@ Object.assign(window, {
   submitScheduleForm,
   deleteSchedule,
   toggleAnnouncerOnline,
+  handleAnnouncerAvatarUpload,
   openAnnouncerModal,
   submitAnnouncerForm,
   deleteAnnouncer,
